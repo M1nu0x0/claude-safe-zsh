@@ -1,6 +1,6 @@
 {
   "name": "safe-zsh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reads the Bash tool's zsh like bash for globs, word splitting and = words: a SessionStart hook writes one setopt line to CLAUDE_ENV_FILE",
   "author": {
     "name": "M1nu0x0",
