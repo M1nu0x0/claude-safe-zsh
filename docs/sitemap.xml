@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://m1nu0x0.github.io/claude-safe-zsh/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://m1nu0x0.github.io/claude-safe-zsh/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ko"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ja"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://m1nu0x0.github.io/claude-safe-zsh/"/>
+  </url>
+  <url>
+    <loc>https://m1nu0x0.github.io/claude-safe-zsh/?lang=ko</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://m1nu0x0.github.io/claude-safe-zsh/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ko"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ja"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://m1nu0x0.github.io/claude-safe-zsh/"/>
+  </url>
+  <url>
+    <loc>https://m1nu0x0.github.io/claude-safe-zsh/?lang=ja</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://m1nu0x0.github.io/claude-safe-zsh/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ko"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ja"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://m1nu0x0.github.io/claude-safe-zsh/"/>
+  </url>
+</urlset>
