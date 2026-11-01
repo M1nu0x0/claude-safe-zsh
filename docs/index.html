@@ -3,12 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SafeZsh for Claude: bash-style commands in the Bash tool's zsh</title>
-<meta name="description" content="A Claude Code plugin that makes the Bash tool's zsh read Claude's bash-style commands the way bash does: unmatched globs, word splitting and words that start with =.">
+<script data-pages="{&quot;en&quot;:&quot;./&quot;,&quot;ko&quot;:&quot;./ko/&quot;,&quot;ja&quot;:&quot;./ja/&quot;}">
+(() => {
+  // Runs in <head>, before the page is drawn, so a redirect never shows one page and then another.
+  // ?lang= (links to the old single page) goes to that language's page. / goes to the language the
+  // visitor chose on this site before, unless they came from another page of this site, which is
+  // someone choosing English (also in a new tab, where the link's click handler does not run). A
+  // language page opened directly stays as it is, and nothing is guessed from the browser language:
+  // runtime.js offers that language at the bottom of the page instead.
+  const pages = JSON.parse(document.currentScript.dataset.pages);
+  for (const l in pages) pages[l] = new URL(pages[l], location.href).href;
+  const known = l => Object.hasOwn(pages, l);
+  const here = document.documentElement.lang;
+  let want = new URLSearchParams(location.search).get('lang');
+  if (!(want && known(want)) && here === 'en') {
+    let fromSite = false, saved = null;
+    try { fromSite = new URL(document.referrer).href.startsWith(pages.en); } catch {}
+    try { saved = localStorage.getItem('lang'); } catch {}
+    want = fromSite ? null : saved;
+  }
+  if (want && known(want) && want !== here) location.replace(pages[want] + location.hash);
+})();
+</script>
+<title>SafeZsh: fix zsh "no matches found" in Claude Code's Bash tool</title>
+<meta name="description" content="A Claude Code plugin that stops zsh errors such as no matches found and ==== not found in the Bash tool by making zsh read Claude's commands like bash.">
 <link rel="canonical" href="https://m1nu0x0.github.io/claude-safe-zsh/">
 <link rel="alternate" hreflang="en" href="https://m1nu0x0.github.io/claude-safe-zsh/">
-<link rel="alternate" hreflang="ko" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ko">
-<link rel="alternate" hreflang="ja" href="https://m1nu0x0.github.io/claude-safe-zsh/?lang=ja">
+<link rel="alternate" hreflang="ko" href="https://m1nu0x0.github.io/claude-safe-zsh/ko/">
+<link rel="alternate" hreflang="ja" href="https://m1nu0x0.github.io/claude-safe-zsh/ja/">
 <link rel="alternate" hreflang="x-default" href="https://m1nu0x0.github.io/claude-safe-zsh/">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1C1C1C" media="(prefers-color-scheme: dark)">
@@ -25,25 +47,29 @@
 <meta property="og:locale:alternate" content="ko_KR">
 <meta property="og:locale:alternate" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image:alt" content="A Bash tool call, grep -rn TODO src --include=*.ts, finding a TODO instead of stopping with no matches found">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "SafeZsh for Claude",
   "alternateName": "claude-safe-zsh",
-  "description": "A Claude Code plugin that makes the Bash tool's zsh read Claude's bash-style commands the way bash does.",
+  "description": "A Claude Code plugin that stops zsh errors such as no matches found and ==== not found in the Bash tool by making zsh read Claude's commands like bash.",
   "url": "https://m1nu0x0.github.io/claude-safe-zsh/",
+  "image": "https://m1nu0x0.github.io/claude-safe-zsh/images/og.png",
+  "softwareVersion": "0.1.0",
+  "dateModified": "2026-11-01",
   "codeRepository": "https://github.com/M1nu0x0/claude-safe-zsh",
   "programmingLanguage": "Shell",
   "license": "https://opensource.org/licenses/MIT",
   "author": { "@type": "Person", "name": "M1nu0x0", "url": "https://github.com/M1nu0x0" },
-  "inLanguage": ["en", "ko", "ja"]
+  "inLanguage": "en"
 }
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='24' font-size='22' font-family='monospace' font-weight='700' text-anchor='middle' fill='%237A7A7A'%3E%25%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans+JP:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --paper: #FFFFFF;
@@ -110,8 +136,18 @@
     padding: 6px 8px; border-radius: 6px; cursor: pointer; text-decoration: none;
   }
   .controls button:hover, .controls a:hover { color: var(--ink); }
-  .controls button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
   .sep { width: 1px; height: 18px; background: var(--rule); margin: 0 6px; }
+
+  /* The offer of the visitor's browser language: fixed at the bottom, so it moves nothing on the page. */
+  .offer {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 10;
+    display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100% - 32px);
+    background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 8px 8px 8px 16px; font-size: 0.9375rem; box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  }
+  .offer[hidden] { display: none; }
+  .offer button { font: inherit; color: var(--dim); background: none; border: 0; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  .offer button:hover { color: var(--ink); }
 
   /* Hero: the line itself */
   .hero { padding: 40px 0 40px; }
@@ -201,19 +237,21 @@
   figure pre .p { color: var(--dim); }
   figure pre .err { color: var(--dim); text-decoration: line-through; }
 
+  .controls a[aria-current="page"] { color: var(--ink); font-weight: 600; }
+
   /* Issue list */
   dl.os dd img { vertical-align: -3px; margin-right: 6px; }
 </style>
 <noscript><style>.chat.pre .bubble { opacity: 1; transform: none; } .type > .ghost { visibility: visible; } .controls button, .controls .sep { display: none; }</style></noscript>
 </head>
-<body>
+<body data-copied="Copied" data-offers="{&quot;ko&quot;:{&quot;text&quot;:&quot;이 페이지는 한국어로도 볼 수 있습니다.&quot;,&quot;go&quot;:&quot;한국어로 보기&quot;,&quot;close&quot;:&quot;닫기&quot;,&quot;href&quot;:&quot;./ko/&quot;},&quot;ja&quot;:{&quot;text&quot;:&quot;このページは日本語でも読めます。&quot;,&quot;go&quot;:&quot;日本語で読む&quot;,&quot;close&quot;:&quot;閉じる&quot;,&quot;href&quot;:&quot;./ja/&quot;}}">
 <div class="wrap">
   <header class="top">
     <a class="name" href="https://github.com/M1nu0x0/claude-safe-zsh">claude-safe-zsh</a>
     <div class="controls">
-      <button type="button" data-lang-btn="ko" lang="ko">한국어</button>
-      <button type="button" data-lang-btn="en" lang="en" aria-pressed="true">English</button>
-      <button type="button" data-lang-btn="ja" lang="ja">日本語</button>
+      <a data-lang-link="ko" href="./ko/" hreflang="ko" lang="ko">한국어</a>
+      <a data-lang-link="en" href="./" aria-current="page" hreflang="en" lang="en">English</a>
+      <a data-lang-link="ja" href="./ja/" hreflang="ja" lang="ja">日本語</a>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" id="theme" data-i18n-aria="theme" aria-label="Toggle light/dark"></button>
       <a href="https://github.com/M1nu0x0/claude-safe-zsh">GitHub</a>
@@ -223,12 +261,12 @@
   <main>
     <div class="hero">
       <div class="chat pre" id="chat">
-        <p class="bubble" id="ask">Find the TODOs in src</p>
+        <p class="bubble" id="ask" data-i18n="ask">Find the TODOs in src</p>
         <p class="answer mono type" id="answer"><span class="sr">grep -rn TODO src --include=*.ts</span><span class="ghost" aria-hidden="true">grep -rn TODO src --include=*.ts</span><span class="typed" aria-hidden="true"></span></p>
         <p class="line mono type" id="line"><span class="sr">src/app.ts:12:  // TODO retry on timeout</span><span class="ghost" aria-hidden="true">src/app.ts:12:  // TODO retry on timeout</span><span class="typed" aria-hidden="true"></span></p>
       </div>
       <h1>SafeZsh for Claude</h1>
-      <p class="subtitle" data-i18n="subtitle">Claude writes bash; the Bash tool runs zsh. This plugin makes zsh read those commands like bash.</p>
+      <p class="subtitle" data-i18n="subtitle">Stops zsh errors such as <code>no matches found</code> in Claude Code's Bash tool. Claude writes bash, the Bash tool runs zsh, and this plugin makes zsh read those commands like bash.</p>
       <p data-i18n="lead">Without it, the command above stops with <code>no matches found: --include=*.ts</code> and grep never runs.</p>
     </div>
 
@@ -304,17 +342,17 @@ README.md  src
       <h2 id="issues" data-i18n="issuesTitle">Related issues</h2>
       <p data-i18n="issuesLead">Badges show each issue's current state.</p>
       <dl class="os">
-        <dt><a href="https://github.com/anthropics/claude-code/issues/103027">#103027</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=" alt="" height="20"><span data-i18n="i103027">Claude keeps writing bash syntax under zsh. The reason for this plugin.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/67146">#67146</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/67146?label=" alt="" height="20"><span data-i18n="i67146">The earlier report of the same problem, closed for inactivity.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/103576">#103576</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103576?label=" alt="" height="20"><span data-i18n="i103576">Unsplit words made pytest run no tests, and the empty result was reported as is.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/74888">#74888</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74888?label=" alt="" height="20"><span data-i18n="i74888">Monitor tool examples assume bash word splitting.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/101554">#101554</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/101554?label=" alt="" height="20"><span data-i18n="i101554">A bash builtin run under zsh. Not something this plugin can fix.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/74746">#74746</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74746?label=" alt="" height="20"><span data-i18n="i74746">Run the Bash tool under bash. Closed with <code>CLAUDE_CODE_SHELL</code>.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/7490">#7490</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/7490?label=" alt="" height="20"><span data-i18n="i7490">Choose the Bash tool's shell, or inherit the one Claude Code was started from.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/91498">#91498</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/91498?label=" alt="" height="20"><span data-i18n="i91498">The Bash tool runs the login shell, so rename it or flag shell errors.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/52521">#52521</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/52521?label=" alt="" height="20"><span data-i18n="i52521">Rename the <code>Bash</code> tool.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/2444">#2444</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/2444?label=" alt="" height="20"><span data-i18n="i2444">The Bash tool runs in the default shell, not bash.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/24573">#24573</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/24573?label=" alt="" height="20"><span data-i18n="i24573">The Bash tool picks zsh even for a bash user.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/103027">#103027</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i103027">Claude keeps writing bash syntax under zsh. The reason for this plugin.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/67146">#67146</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/67146?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i67146">The earlier report of the same problem, closed for inactivity.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/103576">#103576</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103576?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i103576">Unsplit words made pytest run no tests, and the empty result was reported as is.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/74888">#74888</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74888?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i74888">Monitor tool examples assume bash word splitting.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/101554">#101554</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/101554?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i101554">A bash builtin run under zsh. Not something this plugin can fix.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/74746">#74746</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74746?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i74746">Run the Bash tool under bash. Closed with <code>CLAUDE_CODE_SHELL</code>.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/7490">#7490</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/7490?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i7490">Choose the Bash tool's shell, or inherit the one Claude Code was started from.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/91498">#91498</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/91498?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i91498">The Bash tool runs the login shell, so rename it or flag shell errors.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/52521">#52521</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/52521?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i52521">Rename the <code>Bash</code> tool.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/2444">#2444</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/2444?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i2444">The Bash tool runs in the default shell, not bash.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/24573">#24573</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/24573?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i24573">The Bash tool picks zsh even for a bash user.</span></dd>
       </dl>
     </section>
 
@@ -326,6 +364,8 @@ README.md  src
       <details><summary data-i18n="q4">Does it send data anywhere?</summary><p data-i18n="a4">No. The hook only appends one line to a file Claude Code gives it.</p></details>
       <details><summary data-i18n="q5">Which systems is it tested on?</summary><p data-i18n="a5">CI runs on Ubuntu and macOS, and every day against the latest Claude Code.</p></details>
       <details><summary data-i18n="q6">How do I remove it?</summary><p data-i18n="a6">Run <code>claude plugin uninstall safe-zsh</code> in a shell.</p></details>
+      <details><summary data-i18n="q7">Why does <code>(eval):1: no matches found</code> appear?</summary><p data-i18n="a7"><code>(eval)</code> means the error came from the Bash tool's zsh, which runs each command with eval. In zsh a glob that matches no file is an error, so the whole command stops there, while bash passes the word on as it is. This plugin makes zsh pass it on too (<code>no_nomatch</code>). In a terminal the same error reads <code>zsh: no matches found</code>.</p></details>
+      <details><summary data-i18n="q8">What is <code>==== not found</code>?</summary><p data-i18n="a8">zsh replaces a word that starts with <code>=</code> with the path of the command it names (<code>=ls</code> becomes <code>/bin/ls</code>), so <code>echo =====</code> looks for a command named <code>====</code> and fails. Commands that print a row of <code>=</code> as a separator run into this. This plugin turns that off (<code>no_equals</code>).</p></details>
     </section>
   </main>
 
@@ -337,229 +377,46 @@ README.md  src
     </nav>
     <p data-i18n="foot">MIT License. An unofficial plugin, not affiliated with Anthropic.</p>
   </footer>
+  <p class="offer" id="offer" role="status" hidden><span></span><a></a><button type="button"></button></p>
 </div>
 
 <script>
 (() => {
-  const T = {
-    ko: {
-      htmlTitle: 'SafeZsh for Claude: Bash 도구의 zsh에서 bash 문법 그대로',
-      desc: 'Claude가 bash 문법으로 쓴 명령을 Bash 도구의 zsh도 bash처럼 해석하게 하는 Claude Code 플러그인입니다. 매치 없는 glob, 단어 분리, =로 시작하는 단어.',
-      theme: '라이트/다크 전환',
-      ask: 'src에서 TODO 찾아줘',
-      subtitle: 'Claude는 bash로 쓰고 Bash 도구는 zsh로 실행합니다. 이 플러그인은 zsh가 그 명령을 bash처럼 읽게 합니다.',
-      lead: '이 플러그인이 없으면 위 명령은 <code>no matches found: --include=*.ts</code>로 멈추고 grep은 실행되지 않습니다.',
-      installTitle: '설치',
-      installTerminal: 'Claude Code 터미널 프롬프트에서:',
-      installNote: '<code>Add marketplace?</code>에 <code>y</code>를 누르고 scope는 user를 고릅니다.',
-      installShell: '셸에서는:',
-      installDesktop: 'Claude Desktop에서는 프롬프트 옆 <code>+</code> → Plugins → Add marketplace에 <code>M1nu0x0/claude-safe-zsh</code>를 넣고 <code>safe-zsh</code>를 추가합니다. 다음 세션부터 적용됩니다.',
-      copy: '복사',
-      copied: '복사했습니다',
-      screensTitle: '전과 후',
-      beforeCap: 'zsh 기본값',
-      afterCap: '이 플러그인을 켠 zsh',
-      whyTitle: '만든 이유',
-      why1: 'macOS는 로그인 셸이 zsh라서 Bash 도구도 zsh로 명령을 실행하지만, Claude는 bash 문법으로 명령을 씁니다.',
-      why2: '<a href="https://github.com/anthropics/claude-code/issues/103027">anthropics/claude-code#103027</a>은 12주 동안 Bash 호출 61,040번 중 2,570번에서 zsh 오류를 셌습니다. 9월 하순부터는 1,000번당 51번이었고, 그중 76%는 명령이 0으로 끝나 오류가 출력 중간에 묻힌 채 Claude가 그대로 읽고 넘어갔습니다.',
-      why3: '이 이슈가 Claude Code에서 고쳐지면 이 플러그인은 필요 없어집니다. CI가 매일 이슈 상태를 확인합니다.',
-      howTitle: '동작',
-      how1: '세션이 시작될 때(startup, resume, clear, compact) SessionStart 훅이 <code>CLAUDE_ENV_FILE</code>에 한 줄을 덧붙입니다. Claude Code는 이 파일을 Bash 도구 명령마다 앞에 붙이므로, 그 줄이 같은 셸에서 실행됩니다.',
-      how2: 'bash에서는 조건이 거짓이라 0으로 끝나므로, 뒤에 이어진 명령도 그대로 실행됩니다.',
-      fixesTitle: '막는 것',
-      fixNomatch: '<code>--include=*.ts</code>나 <code>ls libs/*/README.md</code>처럼 매치 없는 glob이 명령을 멈추지 않고 그대로 넘어갑니다.',
-      fixSplit: '따옴표 없는 <code>$var</code>가 단어로 나뉘어, <code>for f in $list</code>가 항목마다 한 번씩 돕니다.',
-      fixEquals: '<code>=</code>로 시작하는 단어를 그대로 둡니다. <code>echo =====</code>가 출력되고, <code>=ls</code>가 <code>/bin/ls</code>로 바뀌지 않습니다.',
-      notFixed: '콜론 modifier(<code>$B:path</code>), 첨자로 읽히는 <code>$pat[...]</code>, 특수 변수 <code>path</code>와 <code>status</code>, <code>${!v}</code>나 <code>compgen</code> 같은 bash 전용 문법은 막지 못합니다. 이런 경우는 <code>CLAUDE_CODE_SHELL=/bin/bash</code>로 Bash 도구를 아예 bash로 실행할 수 있습니다.',
-      issuesTitle: '관련 이슈',
-      issuesLead: '배지는 각 이슈의 현재 상태입니다.',
-      i103027: 'Claude가 zsh에서 bash 문법을 계속 씀. 이 플러그인을 만든 이유.',
-      i67146: '같은 문제의 앞선 보고. 활동이 없어 닫힘.',
-      i103576: '단어 분리가 안 돼 pytest가 테스트를 하나도 돌리지 않았고, 빈 결과가 그대로 보고됨.',
-      i74888: 'Monitor 도구 예시가 bash 단어 분리를 가정함.',
-      i101554: 'zsh에서 bash 내장 명령을 실행함. 이 플러그인으로는 막을 수 없음.',
-      i74746: 'Bash 도구를 bash로 실행하게 해 달라는 요청. <code>CLAUDE_CODE_SHELL</code>로 닫힘.',
-      i7490: 'Bash 도구가 쓸 셸을 고르거나, Claude Code를 실행한 셸을 물려받게 해 달라는 요청.',
-      i91498: 'Bash 도구가 로그인 셸을 실행하니 이름을 바꾸거나 셸 오류를 알려 달라는 제안.',
-      i52521: '<code>Bash</code> 도구 이름 변경 제안.',
-      i2444: 'Bash 도구가 bash가 아니라 기본 셸에서 실행된다는 보고.',
-      i24573: 'bash 사용자인데도 Bash 도구가 zsh를 고름.',
-      faqTitle: '자주 묻는 질문',
-      q1: '내 터미널이나 ~/.zshrc가 바뀌나요?',
-      a1: '아니요. 옵션은 Bash 도구의 셸에만 적용됩니다. 터미널, dotfile, 명령 안에서 다시 띄운 <code>zsh -c</code>에는 적용되지 않습니다.',
-      q2: 'bash를 쓰는데 뭔가 하나요?',
-      a2: '아니요. bash에서는 조건이 거짓이라 0으로 끝납니다.',
-      q3: '그냥 CLAUDE_CODE_SHELL=/bin/bash를 쓰면 되지 않나요?',
-      a3: '그것도 되고 더 많이 해결되지만, Bash 도구에서 내 zsh 함수와 설정을 쓸 수 없게 됩니다. 이 플러그인은 zsh를 그대로 두고 가장 자주 깨지는 세 가지만 끕니다.',
-      q4: '어디로 데이터를 보내나요?',
-      a4: '보내지 않습니다. 훅은 Claude Code가 준 파일에 한 줄을 덧붙이기만 합니다.',
-      q5: '어떤 OS에서 확인했나요?',
-      a5: 'Ubuntu와 macOS에서 CI가 돌고, 매일 최신 Claude Code로도 확인합니다.',
-      q6: '제거하려면 어떻게 하나요?',
-      a6: '셸에서 <code>claude plugin uninstall safe-zsh</code>를 실행합니다.',
-      repo: '저장소',
-      releases: '릴리스',
-      changelog: '변경 기록',
-      foot: 'MIT License. Anthropic과 관련 없는 비공식 플러그인입니다.',
-    },
-    en: {
-      htmlTitle: "SafeZsh for Claude: bash-style commands in the Bash tool's zsh",
-      desc: "A Claude Code plugin that makes the Bash tool's zsh read Claude's bash-style commands the way bash does: unmatched globs, word splitting and words that start with =.",
-      theme: 'Toggle light/dark',
-      ask: 'Find the TODOs in src',
-      subtitle: 'Claude writes bash; the Bash tool runs zsh. This plugin makes zsh read those commands like bash.',
-      lead: 'Without it, the command above stops with <code>no matches found: --include=*.ts</code> and grep never runs.',
-      installTitle: 'Install',
-      installTerminal: 'At the Claude Code terminal prompt:',
-      installNote: 'Answer <code>y</code> to <code>Add marketplace?</code> and choose the user scope.',
-      installShell: 'From a shell:',
-      installDesktop: 'In Claude Desktop, click <code>+</code> next to the prompt box → Plugins → Add marketplace, enter <code>M1nu0x0/claude-safe-zsh</code>, then add <code>safe-zsh</code>. It applies from the next session.',
-      copy: 'Copy',
-      copied: 'Copied',
-      screensTitle: 'Before and after',
-      beforeCap: 'zsh as it is',
-      afterCap: 'zsh with this plugin',
-      whyTitle: 'Why',
-      why1: 'On macOS the login shell is zsh, so the Bash tool runs commands in zsh, but Claude writes them for bash.',
-      why2: '<a href="https://github.com/anthropics/claude-code/issues/103027">anthropics/claude-code#103027</a> counted 2,570 zsh errors in 61,040 Bash calls over twelve weeks. Since late September it was 51 per 1,000 calls, and 76% of them were silent: the command still exited 0, so the error sat in the middle of the output and Claude read on.',
-      why3: 'Once that issue is fixed in Claude Code, this plugin is no longer needed. CI checks the issue every day.',
-      howTitle: 'How it works',
-      how1: 'At session start (startup, resume, clear, compact) a SessionStart hook appends one line to <code>CLAUDE_ENV_FILE</code>. Claude Code prepends that file to every Bash tool command, so the line runs in the same shell.',
-      how2: 'Under bash the condition is false and the line exits 0, so a command chained after it still runs.',
-      fixesTitle: 'What it fixes',
-      fixNomatch: 'An unmatched glob such as <code>--include=*.ts</code> or <code>ls libs/*/README.md</code> is passed through instead of aborting the command.',
-      fixSplit: 'An unquoted <code>$var</code> splits into words, so <code>for f in $list</code> loops once per item.',
-      fixEquals: 'A word that starts with <code>=</code> stays as it is: <code>echo =====</code> prints, and <code>=ls</code> is not turned into <code>/bin/ls</code>.',
-      notFixed: 'It does not fix colon modifiers (<code>$B:path</code>), <code>$pat[...]</code> read as a subscript, <code>path</code> and <code>status</code> as special variables, or bash-only syntax such as <code>${!v}</code> and <code>compgen</code>. For those, <code>CLAUDE_CODE_SHELL=/bin/bash</code> runs the Bash tool in bash instead.',
-      issuesTitle: 'Related issues',
-      issuesLead: "Badges show each issue's current state.",
-      i103027: 'Claude keeps writing bash syntax under zsh. The reason for this plugin.',
-      i67146: 'The earlier report of the same problem, closed for inactivity.',
-      i103576: 'Unsplit words made pytest run no tests, and the empty result was reported as is.',
-      i74888: 'Monitor tool examples assume bash word splitting.',
-      i101554: 'A bash builtin run under zsh. Not something this plugin can fix.',
-      i74746: 'Run the Bash tool under bash. Closed with <code>CLAUDE_CODE_SHELL</code>.',
-      i7490: "Choose the Bash tool's shell, or inherit the one Claude Code was started from.",
-      i91498: 'The Bash tool runs the login shell, so rename it or flag shell errors.',
-      i52521: 'Rename the <code>Bash</code> tool.',
-      i2444: 'The Bash tool runs in the default shell, not bash.',
-      i24573: 'The Bash tool picks zsh even for a bash user.',
-      faqTitle: 'Questions',
-      q1: 'Does it change my terminal or ~/.zshrc?',
-      a1: "No. The options apply only to the Bash tool's shell, not to your terminal, your dotfiles or a <code>zsh -c</code> started inside a command.",
-      q2: 'I use bash. Does it do anything?',
-      a2: "No. Under bash the line's condition is false and it exits 0.",
-      q3: 'Why not just use CLAUDE_CODE_SHELL=/bin/bash?',
-      a3: 'That works and fixes more, but your zsh functions and settings are no longer available in the Bash tool. This plugin keeps zsh and turns off only the three behaviours that break most often.',
-      q4: 'Does it send data anywhere?',
-      a4: 'No. The hook only appends one line to a file Claude Code gives it.',
-      q5: 'Which systems is it tested on?',
-      a5: 'CI runs on Ubuntu and macOS, and every day against the latest Claude Code.',
-      q6: 'How do I remove it?',
-      a6: 'Run <code>claude plugin uninstall safe-zsh</code> in a shell.',
-      repo: 'Repository',
-      releases: 'Releases',
-      changelog: 'Changelog',
-      foot: 'MIT License. An unofficial plugin, not affiliated with Anthropic.',
-    },
-    ja: {
-      htmlTitle: 'SafeZsh for Claude: Bash ツールの zsh で bash の書き方のまま',
-      desc: 'Claude が bash の書き方で書いたコマンドを、Bash ツールの zsh でも bash と同じように解釈させる Claude Code のプラグインです。一致しない glob、単語分割、= で始まる単語。',
-      theme: 'ライト/ダーク切り替え',
-      ask: 'src の TODO を探して',
-      subtitle: 'Claude は bash で書き、Bash ツールは zsh で実行します。このプラグインは zsh にそのコマンドを bash と同じように読ませます。',
-      lead: 'このプラグインがないと、上のコマンドは <code>no matches found: --include=*.ts</code> で止まり、grep は実行されません。',
-      installTitle: 'インストール',
-      installTerminal: 'Claude Code のターミナルのプロンプトで:',
-      installNote: '<code>Add marketplace?</code> に <code>y</code> と答え、scope は user を選びます。',
-      installShell: 'シェルからは:',
-      installDesktop: 'Claude Desktop では、プロンプト横の <code>+</code> → Plugins → Add marketplace に <code>M1nu0x0/claude-safe-zsh</code> を入力し、<code>safe-zsh</code> を追加します。次のセッションから適用されます。',
-      copy: 'コピー',
-      copied: 'コピーしました',
-      screensTitle: '前と後',
-      beforeCap: 'そのままの zsh',
-      afterCap: 'このプラグインを入れた zsh',
-      whyTitle: '作った理由',
-      why1: 'macOS ではログインシェルが zsh なので Bash ツールも zsh でコマンドを実行しますが、Claude は bash の書き方でコマンドを書きます。',
-      why2: '<a href="https://github.com/anthropics/claude-code/issues/103027">anthropics/claude-code#103027</a> は 12 週間で Bash の呼び出し 61,040 回のうち 2,570 回の zsh エラーを数えました。9 月下旬からは 1,000 回あたり 51 回で、その 76% はコマンドが 0 で終わったため、エラーが出力の途中に埋もれたまま Claude が読み進めていました。',
-      why3: 'この issue が Claude Code で修正されれば、このプラグインは不要になります。CI が毎日 issue の状態を確認しています。',
-      howTitle: '動作',
-      how1: 'セッション開始時（startup、resume、clear、compact）に SessionStart フックが <code>CLAUDE_ENV_FILE</code> に 1 行を追記します。Claude Code はこのファイルを Bash ツールのコマンドごとに先頭に付けるので、その行が同じシェルで実行されます。',
-      how2: 'bash では条件が偽になり 0 で終わるので、後に続くコマンドもそのまま実行されます。',
-      fixesTitle: '防げるもの',
-      fixNomatch: '<code>--include=*.ts</code> や <code>ls libs/*/README.md</code> のように一致しない glob が、コマンドを止めずにそのまま渡されます。',
-      fixSplit: 'クォートしていない <code>$var</code> が単語に分割され、<code>for f in $list</code> が項目ごとに 1 回ずつ回ります。',
-      fixEquals: '<code>=</code> で始まる単語をそのままにします。<code>echo =====</code> が出力され、<code>=ls</code> が <code>/bin/ls</code> に変わりません。',
-      notFixed: 'コロン修飾子（<code>$B:path</code>）、添字として読まれる <code>$pat[...]</code>、特殊変数の <code>path</code> と <code>status</code>、<code>${!v}</code> や <code>compgen</code> のような bash 専用の書き方は防げません。その場合は <code>CLAUDE_CODE_SHELL=/bin/bash</code> で Bash ツールを bash で実行できます。',
-      issuesTitle: '関連 issue',
-      issuesLead: 'バッジは各 issue の現在の状態です。',
-      i103027: 'Claude が zsh で bash の書き方を使い続ける。このプラグインを作った理由。',
-      i67146: '同じ問題の以前の報告。活動がなく閉じられた。',
-      i103576: '単語分割されず pytest がテストを 1 つも実行せず、空の結果がそのまま報告された。',
-      i74888: 'Monitor ツールの例が bash の単語分割を前提にしている。',
-      i101554: 'zsh で bash の組み込みコマンドを実行した。このプラグインでは防げない。',
-      i74746: 'Bash ツールを bash で実行したいという要望。<code>CLAUDE_CODE_SHELL</code> で閉じられた。',
-      i7490: 'Bash ツールのシェルを選ぶか、Claude Code を起動したシェルを引き継ぎたいという要望。',
-      i91498: 'Bash ツールはログインシェルを実行するので、名前を変えるかシェルのエラーを知らせてほしいという提案。',
-      i52521: '<code>Bash</code> ツールの名前変更の提案。',
-      i2444: 'Bash ツールが bash ではなく既定のシェルで実行されるという報告。',
-      i24573: 'bash ユーザーなのに Bash ツールが zsh を選ぶ。',
-      faqTitle: 'よくある質問',
-      q1: 'ターミナルや ~/.zshrc は変わりますか？',
-      a1: 'いいえ。オプションは Bash ツールのシェルにだけ適用されます。ターミナル、dotfile、コマンドの中で起動した <code>zsh -c</code> には適用されません。',
-      q2: 'bash を使っています。何かしますか？',
-      a2: 'いいえ。bash では条件が偽になり 0 で終わります。',
-      q3: 'CLAUDE_CODE_SHELL=/bin/bash を使えばよいのでは？',
-      a3: 'それでも動き、より多くの問題が解決しますが、Bash ツールで自分の zsh の関数や設定が使えなくなります。このプラグインは zsh のまま、最もよく壊れる 3 つだけをオフにします。',
-      q4: 'どこかにデータを送りますか？',
-      a4: '送りません。フックは Claude Code から渡されたファイルに 1 行を追記するだけです。',
-      q5: 'どの OS で確認していますか？',
-      a5: 'Ubuntu と macOS で CI が動き、毎日最新の Claude Code でも確認しています。',
-      q6: '削除するには？',
-      a6: 'シェルで <code>claude plugin uninstall safe-zsh</code> を実行します。',
-      repo: 'リポジトリ',
-      releases: 'リリース',
-      changelog: '変更履歴',
-      foot: 'MIT License. Anthropic とは関係のない非公式のプラグインです。',
-    },
-  };
-
+  // Each language has its own pre-rendered page (/, /ko/, /ja/), so search engines and link previews
+  // read the page in its own language without running this script. The script only adds behaviour.
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
   const root = document.documentElement;
-  const SITE = 'https://m1nu0x0.github.io/claude-safe-zsh/';
+  const here = root.lang;
 
-  // Language: ?lang= > saved > browser > English.
-  const pick = () => {
-    const q = new URLSearchParams(location.search).get('lang');
-    if (q && T[q]) return q;
-    const saved = store.get('lang');
-    if (saved && T[saved]) return saved;
-    const nav = (navigator.languages || [navigator.language || 'en']).map(l => l.slice(0, 2));
-    return nav.find(l => T[l]) || 'en';
-  };
-  let lang = pick();
-
-  const apply = () => {
-    const t = T[lang];
-    root.lang = lang;
-    document.title = t.htmlTitle;
-    document.querySelector('meta[name="description"]').content = t.desc;
-    document.querySelector('link[rel="canonical"]').href = SITE + (lang === 'en' ? '' : '?lang=' + lang);
-    document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t[el.dataset.i18n]; });
-    document.querySelectorAll('[data-i18n-alt]').forEach(el => { el.alt = t[el.dataset.i18nAlt]; });
-    document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t[el.dataset.i18nAria]); });
-    document.querySelectorAll('[data-lang-btn]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.langBtn === lang)));
-  };
-
-  document.querySelectorAll('[data-lang-btn]').forEach(b => b.addEventListener('click', () => {
-    lang = b.dataset.langBtn;
-    store.set('lang', lang);
-    apply();
-    hero();
+  // Language: the redirect, if any, already ran in <head> (site/redirect.js). Choosing a language on
+  // the page saves it, and / goes there from then on.
+  document.querySelectorAll('[data-lang-link]').forEach(a => a.addEventListener('click', () => {
+    store.set('lang', a.dataset.langLink);
   }));
+
+  // When the browser's preferred language has its own page and the visitor has not chosen one, offer
+  // it in that language at the bottom of the page, instead of redirecting on a guess.
+  const offerLanguage = () => {
+    if (store.get('lang') || store.get('offerClosed')) return;
+    const offers = JSON.parse(document.body.dataset.offers);
+    const nav = (navigator.languages || [navigator.language || '']).map(l => l.slice(0, 2));
+    const l = nav.find(l => l === here || Object.hasOwn(offers, l));
+    if (!l || l === here) return;
+    const o = offers[l];
+    const box = document.getElementById('offer');
+    const [text, link, close] = box.children;
+    box.lang = l;
+    text.textContent = o.text;
+    link.textContent = o.go;
+    link.href = o.href;
+    link.addEventListener('click', () => store.set('lang', l));
+    close.textContent = o.close;
+    close.addEventListener('click', () => { box.hidden = true; store.set('offerClosed', '1'); });
+    box.hidden = false;
+  };
 
   // Theme: system unless chosen.
   const themeBtn = document.getElementById('theme');
@@ -575,13 +432,16 @@ README.md  src
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawTheme);
 
   // Copy: each button copies the command beside it.
-  document.querySelectorAll('.copy').forEach(btn => btn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(btn.parentElement.querySelector('code').textContent);
-      btn.textContent = T[lang].copied;
-      setTimeout(() => { btn.textContent = T[lang].copy; }, 1600);
-    } catch {}
-  }));
+  document.querySelectorAll('.copy').forEach(btn => {
+    const label = btn.textContent;
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.parentElement.querySelector('code').textContent);
+        btn.textContent = document.body.dataset.copied;
+        setTimeout(() => { btn.textContent = label; }, 1600);
+      } catch {}
+    });
+  });
 
   // The hero: the question goes up, the Bash tool's command types out, then its output types out much faster.
   // Same timings as the sister site's turn-duration line.
@@ -589,7 +449,6 @@ README.md  src
   const OUTPUT = 'src/app.ts:12:  // TODO retry on timeout';
   const BUBBLE_AT = 100, ANSWER_AT = 450, ANSWER_MS = 22.5 / 0.7, LINE_GAP = 150, LINE_MS = 0.9375 * 4;
   const chat = document.getElementById('chat');
-  const ask = document.getElementById('ask');
   const answer = document.getElementById('answer');
   const line = document.getElementById('line');
   let timers = [];
@@ -607,21 +466,15 @@ README.md  src
     return at + chars.length * ms;
   };
   const heroFinal = () => {
-    timers.forEach(clearTimeout);
-    timers = [];
     chat.classList.remove('pre');
-    ask.textContent = T[lang].ask;
     fill(answer, COMMAND, COMMAND);
     fill(line, OUTPUT, OUTPUT);
   };
   const heroPlay = () => {
-    timers.forEach(clearTimeout);
-    timers = [];
-    // Hide the bubble at once (no fall), so a replay only shows it rising.
+    // Hide the bubble at once (no fall), so it only shows rising.
     chat.classList.add('instant', 'pre');
     void chat.offsetWidth;
     chat.classList.remove('instant');
-    ask.textContent = T[lang].ask;
     fill(answer, COMMAND, '');
     fill(line, OUTPUT, '');
     timers.push(setTimeout(() => chat.classList.remove('pre'), BUBBLE_AT));
@@ -629,11 +482,9 @@ README.md  src
     typeOut(line, OUTPUT, answered + LINE_GAP, LINE_MS);
   };
 
-  const hero = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? heroFinal() : heroPlay());
-
-  apply();
   drawTheme();
-  hero();
+  offerLanguage();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) heroFinal(); else heroPlay();
 })();
 </script>
 </body>

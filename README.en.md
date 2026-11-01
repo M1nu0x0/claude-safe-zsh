@@ -2,16 +2,16 @@
 
 [![release](https://img.shields.io/github/v/release/M1nu0x0/claude-safe-zsh)](https://github.com/M1nu0x0/claude-safe-zsh/releases)
 [![CI](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml/badge.svg)](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml)
-[![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](../LICENSE)
+[![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](LICENSE)
 [![anthropics/claude-code#103027](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=anthropics%2Fclaude-code%23103027)](https://github.com/anthropics/claude-code/issues/103027)
 
-[한국어](../README.md) | **English** | [日本語](README.ja.md)
+[한국어](README.md) | **English** | [日本語](README.ja.md)
 
 A Claude Code plugin that makes the Bash tool's zsh read the bash-style commands Claude writes the way bash does.
 
 On macOS the login shell is zsh, so the Bash tool runs commands in zsh. Claude writes them for bash, though, so commands stop or silently behave differently on unmatched globs, unquoted variables and words that start with `=`. At session start this plugin turns on three options in the Bash tool's zsh: `no_nomatch`, `sh_word_split` and `no_equals`.
 
-**[Website](https://m1nu0x0.github.io/claude-safe-zsh/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](../CHANGELOG.md)**
+**[Website](https://m1nu0x0.github.io/claude-safe-zsh/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](CHANGELOG.md)**
 
 | Command Claude wrote | zsh as it is | With this plugin |
 | --- | --- | --- |
@@ -129,7 +129,9 @@ plugins/safe-zsh/
   tests/                tests for node --test
 .github/ci/
   engine-env.sh         checks what the hook wrote, with the real Claude Code
-docs/                   README translations (en, ja), GitHub Pages site
+site/                   site source (page template, translations, script) and its builder
+docs/                   GitHub Pages site built from site/
+README.en.md, README.ja.md  README translations
 ```
 
 The plugin lives in its own folder, `plugins/safe-zsh/`, and the marketplace points at it with a relative path, because claude.ai's Add marketplace can reject a repository whose root is itself the plugin.
@@ -141,7 +143,11 @@ claude plugin validate .                  # marketplace
 claude plugin validate plugins/safe-zsh    # plugin
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # checks the hook with the real Claude Code, without a login
+node site/build.mjs                       # builds the site in docs/ from site/
+node site/og.mjs                          # draws the link-preview image for each language (needs Playwright)
 ```
+
+For the site, edit `site/`, run `node site/build.mjs` to build the per-language pages (`/`, `/ko/`, `/ja/`) and `sitemap.xml` in `docs/`, and commit both. CI fails if the HTML in `docs/` is edited by hand. Rebuild after a version bump too, since the page's JSON-LD carries the plugin version. When the content changes, also set `updated` in `site/i18n.json` to that day; CI warns on a pull request that changes the content without it. After changing `ask` or `ogImageText` in `site/i18n.json`, run `node site/og.mjs` and commit `docs/images/og*.png` as well.
 
 The tests need `sh`, `bash` and `zsh`. They run `zsh -f`, so the tester's own `~/.zshenv` does not mix in.
 
