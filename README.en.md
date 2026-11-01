@@ -55,6 +55,7 @@ It applies from the next session after you install it.
 
 2. Claude Code prepends the contents of `CLAUDE_ENV_FILE` to every Bash tool command and runs them in the same shell, so `setopt` applies as well as `export`.
 3. Under bash the condition is false, so the line does nothing and exits 0. That is why it is `if ... fi` rather than `[ ... ] && setopt`.
+4. If the shell is zsh (`CLAUDE_CODE_SHELL` if set, otherwise `$SHELL`), the hook also prints one line to stdout, which a SessionStart hook sends to the model. It says that a `zsh -c` the model starts inside a command does not inherit these options, so its script should begin with `setopt no_nomatch sh_word_split no_equals;`, or use `bash -c` for bash syntax. The model may ignore it, and it does not reach a child zsh that a tool or script starts.
 
 Without `CLAUDE_ENV_FILE` the hook writes nothing and exits 0. If the line is written again on resume or compact, `setopt` simply runs twice.
 
@@ -125,7 +126,7 @@ plugins/safe-zsh/
     plugin.json         plugin manifest
   hooks/
     hooks.json          one SessionStart hook
-    session-start.sh    appends one setopt line to CLAUDE_ENV_FILE
+    session-start.sh    appends one setopt line to CLAUDE_ENV_FILE and prints one child-zsh hint for the model
   tests/                tests for node --test
 .github/ci/
   engine-env.sh         checks what the hook wrote, with the real Claude Code

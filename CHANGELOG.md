@@ -4,6 +4,10 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+
+- When the shell is zsh, the SessionStart hook also prints one line for the model: a `zsh -c` it starts inside a command does not inherit the options, so its script should begin with the same `setopt` or use `bash -c`; it is a hint the model may ignore, and it does not reach a child zsh that a tool or script starts
+
 ### Changed
 
 - The site has one pre-rendered page per language (`/`, `/ko/`, `/ja/`) instead of one page that switches language in the browser, so search engines and link previews read each language without running JavaScript; each page has its own canonical URL, title, description and Open Graph tags, and the old `?lang=` links redirect to the matching page

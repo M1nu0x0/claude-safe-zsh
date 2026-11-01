@@ -55,6 +55,7 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 
 2. Claude Code는 `CLAUDE_ENV_FILE`의 내용을 Bash 도구 명령마다 앞에 붙여 같은 셸에서 실행합니다. 그래서 `export`뿐 아니라 `setopt`도 적용됩니다.
 3. 셸이 bash면 조건이 거짓이라 아무것도 하지 않고 0으로 끝납니다. `[ ... ] && setopt` 대신 `if ... fi`로 쓴 이유입니다.
+4. 셸이 zsh(`CLAUDE_CODE_SHELL`이 있으면 그 값, 없으면 `$SHELL`)이면 훅이 stdout으로 한 줄을 더 냅니다. SessionStart 훅의 stdout은 모델에게 전달됩니다. Bash 도구 안에서 직접 띄운 `zsh -c`는 위 옵션을 물려받지 않으니 스크립트 맨 앞에 `setopt no_nomatch sh_word_split no_equals;`를 붙이거나, bash 문법이면 `bash -c`를 쓰라는 안내입니다. 모델이 따르지 않을 수 있고, 도구나 스크립트가 띄우는 자식 zsh에는 닿지 않습니다.
 
 `CLAUDE_ENV_FILE`이 없으면 훅은 아무것도 쓰지 않고 0으로 끝납니다. resume이나 compact 때 같은 줄이 다시 쓰여도 `setopt`가 반복될 뿐입니다.
 
@@ -125,7 +126,7 @@ plugins/safe-zsh/
     plugin.json         플러그인 매니페스트
   hooks/
     hooks.json          SessionStart 훅 하나
-    session-start.sh    CLAUDE_ENV_FILE에 setopt 한 줄 추가
+    session-start.sh    CLAUDE_ENV_FILE에 setopt 한 줄 추가, 모델에게 자식 zsh 안내 한 줄 출력
   tests/                node --test 용 테스트
 .github/ci/
   engine-env.sh         실제 Claude Code로 훅이 쓴 내용을 확인

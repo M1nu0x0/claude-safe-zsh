@@ -55,6 +55,7 @@ Claude Desktop では、プロンプト横の `+` → Plugins → Add marketplac
 
 2. Claude Code は `CLAUDE_ENV_FILE` の内容を Bash ツールのコマンドごとに先頭に付け、同じシェルで実行します。そのため `export` だけでなく `setopt` も適用されます。
 3. シェルが bash なら条件が偽になり、何もせずに 0 で終わります。`[ ... ] && setopt` ではなく `if ... fi` で書いているのはこのためです。
+4. シェルが zsh（`CLAUDE_CODE_SHELL` があればその値、なければ `$SHELL`）のとき、フックは stdout にもう 1 行出力します。SessionStart フックの stdout はモデルに渡されます。コマンドの中でモデルが起動する `zsh -c` は上のオプションを引き継がないので、スクリプトの先頭に `setopt no_nomatch sh_word_split no_equals;` を付けるか、bash 構文なら `bash -c` を使うようにという案内です。モデルが従わないことがあり、ツールやスクリプトが起動する子 zsh には届きません。
 
 `CLAUDE_ENV_FILE` がなければ、フックは何も書かずに 0 で終わります。resume や compact のときに同じ行がもう一度書かれても、`setopt` が繰り返されるだけです。
 
@@ -125,7 +126,7 @@ plugins/safe-zsh/
     plugin.json         プラグインのマニフェスト
   hooks/
     hooks.json          SessionStart フック 1 つ
-    session-start.sh    CLAUDE_ENV_FILE に setopt を 1 行追加
+    session-start.sh    CLAUDE_ENV_FILE に setopt を 1 行追加し、モデルに子 zsh の案内を 1 行出力
   tests/                node --test 用のテスト
 .github/ci/
   engine-env.sh         本物の Claude Code でフックが書いた内容を確認
