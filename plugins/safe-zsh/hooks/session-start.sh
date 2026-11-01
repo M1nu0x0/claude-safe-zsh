@@ -6,3 +6,8 @@
 cat >> "$CLAUDE_ENV_FILE" <<'EOF'
 if [ -n "${ZSH_VERSION:-}" ]; then setopt no_nomatch sh_word_split no_equals; fi
 EOF
+# That line reaches only the Bash tool's own shell, so tell the model about the zsh it starts inside a command; stdout of
+# a SessionStart hook goes to the model. shortcut: the model may ignore it, a ZDOTDIR .zshenv would hold for every child zsh.
+case "${CLAUDE_CODE_SHELL:-${SHELL:-}}" in
+  *zsh) echo 'The Bash tool runs zsh with setopt no_nomatch sh_word_split no_equals applied. A zsh you start inside a command (zsh -c, zsh -ic, a #!/bin/zsh script) does not inherit it: begin its script with "setopt no_nomatch sh_word_split no_equals;", or use bash -c for bash syntax.' ;;
+esac

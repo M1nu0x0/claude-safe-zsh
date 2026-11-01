@@ -9,12 +9,26 @@ import { test } from 'node:test'
 const HOOK = join(import.meta.dirname, '..', 'hooks', 'session-start.sh')
 const LINE = 'if [ -n "${ZSH_VERSION:-}" ]; then setopt no_nomatch sh_word_split no_equals; fi\n'
 
+const OPTS = 'setopt no_nomatch sh_word_split no_equals'
+
 // Runs the hook the way Claude Code does, with CLAUDE_ENV_FILE set (or not), and returns what it wrote.
-function hook(envFile) {
-  const env = { ...process.env }
+function hook(envFile, extraEnv = {}) {
+  const env = { ...process.env, ...extraEnv }
   delete env.CLAUDE_ENV_FILE
   if (envFile) env.CLAUDE_ENV_FILE = envFile
   return spawnSync('sh', [HOOK], { encoding: 'utf8', env })
+}
+
+// What the hook prints for the model, given the shell Claude Code would pick (an empty value counts as unset).
+function hint(shellEnv) {
+  const dir = mkdtempSync(join(tmpdir(), 'safe-zsh-'))
+  try {
+    const r = hook(join(dir, 'env.sh'), shellEnv)
+    assert.equal(r.status, 0)
+    return r.stdout
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 // A fresh env file with the hook's line in it, as the Bash tool would see it.
@@ -93,6 +107,21 @@ test('an unquoted variable is split into words, as bash does', () => {
     const r = zsh(file, 'v="a b"; set -- $v; echo $#')
     assert.equal(r.stdout, '2\n')
   })
+})
+
+test('under zsh, the hook prints one line telling the model how to start a child zsh', () => {
+  const out = hint({ SHELL: '/bin/zsh', CLAUDE_CODE_SHELL: '' })
+  assert.equal(out.split('\n').filter(Boolean).length, 1)
+  assert.match(out, /zsh -c/)
+  // The hint and the line the hook writes must name the same options.
+  assert.ok(LINE.includes(OPTS))
+  assert.ok(out.includes(`"${OPTS};"`))
+})
+
+test('under bash the hook prints nothing, and CLAUDE_CODE_SHELL decides over SHELL', () => {
+  assert.equal(hint({ SHELL: '/bin/bash', CLAUDE_CODE_SHELL: '' }), '')
+  assert.equal(hint({ SHELL: '/bin/zsh', CLAUDE_CODE_SHELL: '/bin/bash' }), '')
+  assert.notEqual(hint({ SHELL: '/bin/bash', CLAUDE_CODE_SHELL: '/bin/zsh' }), '')
 })
 
 test('plain zsh, without the line, still fails all three: the tests above are not passing by accident', () => {
