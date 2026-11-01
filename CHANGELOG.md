@@ -4,6 +4,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-01
+
 ### Added
 
 - When the shell is zsh, the SessionStart hook also prints one line for the model: a `zsh -c` it starts inside a command does not inherit the options, so its script should begin with the same `setopt` or use `bash -c`; it is a hint the model may ignore, and it does not reach a child zsh that a tool or script starts
@@ -30,5 +32,6 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - A check that a release tag matches the plugin's version, and Dependabot updates for GitHub Actions
 - GitHub Pages site and READMEs in Korean, English and Japanese, with every related upstream issue and its live state
 
-[Unreleased]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/M1nu0x0/claude-safe-zsh/releases/tag/v0.1.0
