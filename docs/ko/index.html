@@ -3,8 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script data-pages="{&quot;en&quot;:&quot;../&quot;,&quot;ko&quot;:&quot;./&quot;,&quot;ja&quot;:&quot;../ja/&quot;}">
+(() => {
+  // Runs in <head>, before the page is drawn, so a redirect never shows one page and then another.
+  // ?lang= (links to the old single page) goes to that language's page. / goes to the language the
+  // visitor chose on this site before, unless they came from another page of this site, which is
+  // someone choosing English (also in a new tab, where the link's click handler does not run). A
+  // language page opened directly stays as it is, and nothing is guessed from the browser language:
+  // runtime.js offers that language at the bottom of the page instead.
+  const pages = JSON.parse(document.currentScript.dataset.pages);
+  for (const l in pages) pages[l] = new URL(pages[l], location.href).href;
+  const known = l => Object.hasOwn(pages, l);
+  const here = document.documentElement.lang;
+  let want = new URLSearchParams(location.search).get('lang');
+  if (!(want && known(want)) && here === 'en') {
+    let fromSite = false, saved = null;
+    try { fromSite = new URL(document.referrer).href.startsWith(pages.en); } catch {}
+    try { saved = localStorage.getItem('lang'); } catch {}
+    want = fromSite ? null : saved;
+  }
+  if (want && known(want) && want !== here) location.replace(pages[want] + location.hash);
+})();
+</script>
 <title>SafeZsh: Claude Code Bash 도구의 zsh "no matches found" 해결</title>
-<meta name="description" content="Claude Code Bash 도구에서 no matches found, ==== not found 같은 zsh 오류를 막는 플러그인입니다. Claude가 bash 문법으로 쓴 glob, 변수, = 단어를 bash처럼 실행합니다.">
+<meta name="description" content="Claude Code Bash 도구에서 no matches found, ==== not found 같은 zsh 오류를 막는 플러그인입니다.">
 <link rel="canonical" href="https://m1nu0x0.github.io/claude-safe-zsh/ko/">
 <link rel="alternate" hreflang="en" href="https://m1nu0x0.github.io/claude-safe-zsh/">
 <link rel="alternate" hreflang="ko" href="https://m1nu0x0.github.io/claude-safe-zsh/ko/">
@@ -17,7 +39,7 @@
 <meta property="og:title" content="SafeZsh for Claude">
 <meta property="og:description" content="Claude는 bash로 쓰고 Bash 도구는 zsh로 실행합니다. 이 플러그인은 zsh가 그 명령을 bash처럼 읽게 합니다.">
 <meta property="og:url" content="https://m1nu0x0.github.io/claude-safe-zsh/ko/">
-<meta property="og:image" content="https://m1nu0x0.github.io/claude-safe-zsh/images/og.png">
+<meta property="og:image" content="https://m1nu0x0.github.io/claude-safe-zsh/images/og-ko.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Bash 도구가 grep -rn TODO src --include=*.ts를 실행해 no matches found로 멈추지 않고 TODO를 찾은 화면">
@@ -25,14 +47,18 @@
 <meta property="og:locale:alternate" content="en_US">
 <meta property="og:locale:alternate" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image:alt" content="Bash 도구가 grep -rn TODO src --include=*.ts를 실행해 no matches found로 멈추지 않고 TODO를 찾은 화면">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "SafeZsh for Claude",
   "alternateName": "claude-safe-zsh",
-  "description": "Claude Code Bash 도구에서 no matches found, ==== not found 같은 zsh 오류를 막는 플러그인입니다. Claude가 bash 문법으로 쓴 glob, 변수, = 단어를 bash처럼 실행합니다.",
+  "description": "Claude Code Bash 도구에서 no matches found, ==== not found 같은 zsh 오류를 막는 플러그인입니다.",
   "url": "https://m1nu0x0.github.io/claude-safe-zsh/ko/",
+  "image": "https://m1nu0x0.github.io/claude-safe-zsh/images/og-ko.png",
+  "softwareVersion": "0.1.0",
+  "dateModified": "2026-11-01",
   "codeRepository": "https://github.com/M1nu0x0/claude-safe-zsh",
   "programmingLanguage": "Shell",
   "license": "https://opensource.org/licenses/MIT",
@@ -43,7 +69,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='24' font-size='22' font-family='monospace' font-weight='700' text-anchor='middle' fill='%237A7A7A'%3E%25%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans+JP:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --paper: #FFFFFF;
@@ -111,6 +137,17 @@
   }
   .controls button:hover, .controls a:hover { color: var(--ink); }
   .sep { width: 1px; height: 18px; background: var(--rule); margin: 0 6px; }
+
+  /* The offer of the visitor's browser language: fixed at the bottom, so it moves nothing on the page. */
+  .offer {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 10;
+    display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100% - 32px);
+    background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 8px 8px 8px 16px; font-size: 0.9375rem; box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  }
+  .offer[hidden] { display: none; }
+  .offer button { font: inherit; color: var(--dim); background: none; border: 0; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  .offer button:hover { color: var(--ink); }
 
   /* Hero: the line itself */
   .hero { padding: 40px 0 40px; }
@@ -207,7 +244,7 @@
 </style>
 <noscript><style>.chat.pre .bubble { opacity: 1; transform: none; } .type > .ghost { visibility: visible; } .controls button, .controls .sep { display: none; }</style></noscript>
 </head>
-<body data-copied="복사했습니다">
+<body data-copied="복사했습니다" data-offers="{&quot;en&quot;:{&quot;text&quot;:&quot;This page is also in English.&quot;,&quot;go&quot;:&quot;Read it in English&quot;,&quot;close&quot;:&quot;Close&quot;,&quot;href&quot;:&quot;../&quot;},&quot;ja&quot;:{&quot;text&quot;:&quot;このページは日本語でも読めます。&quot;,&quot;go&quot;:&quot;日本語で読む&quot;,&quot;close&quot;:&quot;閉じる&quot;,&quot;href&quot;:&quot;../ja/&quot;}}">
 <div class="wrap">
   <header class="top">
     <a class="name" href="https://github.com/M1nu0x0/claude-safe-zsh">claude-safe-zsh</a>
@@ -229,7 +266,7 @@
         <p class="line mono type" id="line"><span class="sr">src/app.ts:12:  // TODO retry on timeout</span><span class="ghost" aria-hidden="true">src/app.ts:12:  // TODO retry on timeout</span><span class="typed" aria-hidden="true"></span></p>
       </div>
       <h1>SafeZsh for Claude</h1>
-      <p class="subtitle" data-i18n="subtitle">Claude는 bash로 쓰고 Bash 도구는 zsh로 실행합니다. 이 플러그인은 zsh가 그 명령을 bash처럼 읽게 합니다.</p>
+      <p class="subtitle" data-i18n="subtitle">Claude Code Bash 도구에서 <code>no matches found</code> 같은 zsh 오류를 막습니다. Claude는 bash로 쓰고 Bash 도구는 zsh로 실행하는데, 이 플러그인은 zsh가 그 명령을 bash처럼 읽게 합니다.</p>
       <p data-i18n="lead">이 플러그인이 없으면 위 명령은 <code>no matches found: --include=*.ts</code>로 멈추고 grep은 실행되지 않습니다.</p>
     </div>
 
@@ -305,17 +342,17 @@ README.md  src
       <h2 id="issues" data-i18n="issuesTitle">관련 이슈</h2>
       <p data-i18n="issuesLead">배지는 각 이슈의 현재 상태입니다.</p>
       <dl class="os">
-        <dt><a href="https://github.com/anthropics/claude-code/issues/103027">#103027</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=" alt="" height="20"><span data-i18n="i103027">Claude가 zsh에서 bash 문법을 계속 씀. 이 플러그인을 만든 이유.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/67146">#67146</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/67146?label=" alt="" height="20"><span data-i18n="i67146">같은 문제의 앞선 보고. 활동이 없어 닫힘.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/103576">#103576</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103576?label=" alt="" height="20"><span data-i18n="i103576">단어 분리가 안 돼 pytest가 테스트를 하나도 돌리지 않았고, 빈 결과가 그대로 보고됨.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/74888">#74888</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74888?label=" alt="" height="20"><span data-i18n="i74888">Monitor 도구 예시가 bash 단어 분리를 가정함.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/101554">#101554</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/101554?label=" alt="" height="20"><span data-i18n="i101554">zsh에서 bash 내장 명령을 실행함. 이 플러그인으로는 막을 수 없음.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/74746">#74746</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74746?label=" alt="" height="20"><span data-i18n="i74746">Bash 도구를 bash로 실행하게 해 달라는 요청. <code>CLAUDE_CODE_SHELL</code>로 닫힘.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/7490">#7490</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/7490?label=" alt="" height="20"><span data-i18n="i7490">Bash 도구가 쓸 셸을 고르거나, Claude Code를 실행한 셸을 물려받게 해 달라는 요청.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/91498">#91498</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/91498?label=" alt="" height="20"><span data-i18n="i91498">Bash 도구가 로그인 셸을 실행하니 이름을 바꾸거나 셸 오류를 알려 달라는 제안.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/52521">#52521</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/52521?label=" alt="" height="20"><span data-i18n="i52521"><code>Bash</code> 도구 이름 변경 제안.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/2444">#2444</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/2444?label=" alt="" height="20"><span data-i18n="i2444">Bash 도구가 bash가 아니라 기본 셸에서 실행된다는 보고.</span></dd>
-        <dt><a href="https://github.com/anthropics/claude-code/issues/24573">#24573</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/24573?label=" alt="" height="20"><span data-i18n="i24573">bash 사용자인데도 Bash 도구가 zsh를 고름.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/103027">#103027</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i103027">Claude가 zsh에서 bash 문법을 계속 씀. 이 플러그인을 만든 이유.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/67146">#67146</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/67146?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i67146">같은 문제의 앞선 보고. 활동이 없어 닫힘.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/103576">#103576</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103576?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i103576">단어 분리가 안 돼 pytest가 테스트를 하나도 돌리지 않았고, 빈 결과가 그대로 보고됨.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/74888">#74888</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74888?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i74888">Monitor 도구 예시가 bash 단어 분리를 가정함.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/101554">#101554</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/101554?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i101554">zsh에서 bash 내장 명령을 실행함. 이 플러그인으로는 막을 수 없음.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/74746">#74746</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/74746?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i74746">Bash 도구를 bash로 실행하게 해 달라는 요청. <code>CLAUDE_CODE_SHELL</code>로 닫힘.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/7490">#7490</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/7490?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i7490">Bash 도구가 쓸 셸을 고르거나, Claude Code를 실행한 셸을 물려받게 해 달라는 요청.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/91498">#91498</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/91498?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i91498">Bash 도구가 로그인 셸을 실행하니 이름을 바꾸거나 셸 오류를 알려 달라는 제안.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/52521">#52521</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/52521?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i52521"><code>Bash</code> 도구 이름 변경 제안.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/2444">#2444</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/2444?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i2444">Bash 도구가 bash가 아니라 기본 셸에서 실행된다는 보고.</span></dd>
+        <dt><a href="https://github.com/anthropics/claude-code/issues/24573">#24573</a></dt><dd><img src="https://img.shields.io/github/issues/detail/state/anthropics/claude-code/24573?label=" alt="" height="20" loading="lazy" decoding="async"><span data-i18n="i24573">bash 사용자인데도 Bash 도구가 zsh를 고름.</span></dd>
       </dl>
     </section>
 
@@ -327,6 +364,8 @@ README.md  src
       <details><summary data-i18n="q4">어디로 데이터를 보내나요?</summary><p data-i18n="a4">보내지 않습니다. 훅은 Claude Code가 준 파일에 한 줄을 덧붙이기만 합니다.</p></details>
       <details><summary data-i18n="q5">어떤 OS에서 확인했나요?</summary><p data-i18n="a5">Ubuntu와 macOS에서 CI가 돌고, 매일 최신 Claude Code로도 확인합니다.</p></details>
       <details><summary data-i18n="q6">제거하려면 어떻게 하나요?</summary><p data-i18n="a6">셸에서 <code>claude plugin uninstall safe-zsh</code>를 실행합니다.</p></details>
+      <details><summary data-i18n="q7"><code>(eval):1: no matches found</code>는 왜 나오나요?</summary><p data-i18n="a7"><code>(eval)</code>은 Bash 도구의 zsh가 명령을 eval로 실행하다 난 오류라는 뜻입니다. zsh에서는 맞는 파일이 없는 glob이 오류라서 명령 전체가 거기서 멈추고, bash는 그 단어를 그대로 넘깁니다. 이 플러그인은 zsh도 bash처럼 그대로 넘기게 합니다(<code>no_nomatch</code>). 터미널에서는 같은 오류가 <code>zsh: no matches found</code>로 보입니다.</p></details>
+      <details><summary data-i18n="q8"><code>==== not found</code>는 뭔가요?</summary><p data-i18n="a8">zsh는 <code>=</code>로 시작하는 단어를 그 이름의 명령 경로로 바꿉니다(<code>=ls</code>는 <code>/bin/ls</code>). 그래서 <code>echo =====</code>는 <code>====</code>라는 명령을 찾다가 실패합니다. 구분선으로 <code>=</code>를 늘어놓아 출력하는 명령이 여기에 걸립니다. 이 플러그인은 이 동작을 끕니다(<code>no_equals</code>).</p></details>
     </section>
   </main>
 
@@ -338,6 +377,7 @@ README.md  src
     </nav>
     <p data-i18n="foot">MIT License. Anthropic과 관련 없는 비공식 플러그인입니다.</p>
   </footer>
+  <p class="offer" id="offer" role="status" hidden><span></span><a></a><button type="button"></button></p>
 </div>
 
 <script>
@@ -350,36 +390,33 @@ README.md  src
   };
   const root = document.documentElement;
   const here = root.lang;
-  // The language links are the list of pages: each link's href is its language's page, and the
-  // English one is the site root.
-  const pages = {};
-  document.querySelectorAll('[data-lang-link]').forEach(a => { pages[a.dataset.langLink] = a.href; });
-  const known = l => Object.hasOwn(pages, l);
 
-  // Language: ?lang= (links to the old single page) goes to that page. Otherwise only / picks a page
-  // for the visitor, by saved choice and then browser language. A language page opened directly stays
-  // as it is, and so does / reached from another page of this site, since that is someone choosing
-  // English, also when the link was opened in a new tab and its click handler below did not run.
-  const fromSite = () => {
-    try { return new URL(document.referrer).href.startsWith(pages.en); } catch { return false; }
-  };
-  const wanted = () => {
-    const q = new URLSearchParams(location.search).get('lang');
-    if (q && known(q)) return q;
-    if (here !== 'en' || fromSite()) return null;
-    const saved = store.get('lang');
-    if (saved && known(saved)) return saved;
-    const nav = (navigator.languages || [navigator.language || 'en']).map(l => l.slice(0, 2));
-    return nav.find(known) || null;
-  };
-  const want = wanted();
-  if (want && want !== here) {
-    location.replace(pages[want] + location.hash);
-    return;
-  }
+  // Language: the redirect, if any, already ran in <head> (site/redirect.js). Choosing a language on
+  // the page saves it, and / goes there from then on.
   document.querySelectorAll('[data-lang-link]').forEach(a => a.addEventListener('click', () => {
     store.set('lang', a.dataset.langLink);
   }));
+
+  // When the browser's preferred language has its own page and the visitor has not chosen one, offer
+  // it in that language at the bottom of the page, instead of redirecting on a guess.
+  const offerLanguage = () => {
+    if (store.get('lang') || store.get('offerClosed')) return;
+    const offers = JSON.parse(document.body.dataset.offers);
+    const nav = (navigator.languages || [navigator.language || '']).map(l => l.slice(0, 2));
+    const l = nav.find(l => l === here || Object.hasOwn(offers, l));
+    if (!l || l === here) return;
+    const o = offers[l];
+    const box = document.getElementById('offer');
+    const [text, link, close] = box.children;
+    box.lang = l;
+    text.textContent = o.text;
+    link.textContent = o.go;
+    link.href = o.href;
+    link.addEventListener('click', () => store.set('lang', l));
+    close.textContent = o.close;
+    close.addEventListener('click', () => { box.hidden = true; store.set('offerClosed', '1'); });
+    box.hidden = false;
+  };
 
   // Theme: system unless chosen.
   const themeBtn = document.getElementById('theme');
@@ -446,6 +483,7 @@ README.md  src
   };
 
   drawTheme();
+  offerLanguage();
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) heroFinal(); else heroPlay();
 })();
 </script>

@@ -1,6 +1,7 @@
 // Builds the GitHub Pages site in docs/ from site/: one pre-rendered page per language and the sitemap.
 //   node site/build.mjs           writes docs/index.html, docs/ko/index.html, docs/ja/index.html, docs/sitemap.xml
-// Edit site/index.html, site/i18n.json or site/runtime.js, never the generated files; CI fails if they drift.
+// Edit site/index.html, site/i18n.json, site/redirect.js or site/runtime.js, never the generated files; CI fails
+// if they drift. The plugin's version comes from its plugin.json, so a version bump needs a rebuild too.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +10,9 @@ const here = dirname(fileURLToPath(import.meta.url))
 const docs = join(here, '..', 'docs')
 const { site, updated, languages } = JSON.parse(readFileSync(join(here, 'i18n.json'), 'utf8'))
 const template = readFileSync(join(here, 'index.html'), 'utf8')
+const redirect = readFileSync(join(here, 'redirect.js'), 'utf8').trimEnd()
 const runtime = readFileSync(join(here, 'runtime.js'), 'utf8').trimEnd()
+const { version } = JSON.parse(readFileSync(join(here, '..', 'plugins', 'safe-zsh', '.claude-plugin', 'plugin.json'), 'utf8'))
 const LANGS = Object.keys(languages)
 
 const attr = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
@@ -27,12 +30,21 @@ function render(lang) {
   const fields = {
     lang,
     site,
+    version,
+    updated,
+    font: L.font.replace(/ /g, '+'),
+    // Each language's page, relative to this one, for the head script's redirect.
+    pages: attr(JSON.stringify(Object.fromEntries(LANGS.map(l => [l, rel(lang, l)])))),
+    // The other languages, each offered in its own words when it is the visitor's browser language.
+    offers: attr(JSON.stringify(Object.fromEntries(LANGS.filter(l => l !== lang)
+      .map(l => [l, { ...languages[l].suggest, href: rel(lang, l) }])))),
     alternates: alternates.map(([l, href]) => `<link rel="alternate" hreflang="${l}" href="${href}">`).join('\n'),
     title: text(L.title),
     description: attr(L.description),
     url,
     ogTitle: attr(L.ogTitle),
     ogDescription: attr(L.ogDescription),
+    ogImage: L.ogImage,
     ogImageAlt: attr(L.ogImageAlt),
     ogLocale: L.ogLocale,
     ogLocaleAlternates: LANGS.filter(l => l !== lang)
@@ -41,7 +53,7 @@ function render(lang) {
     ldDescription: json(L.description),
     copied: attr(t.copied),
   }
-  let html = template.replace('/*RUNTIME*/', () => runtime)
+  let html = template.replace('/*REDIRECT*/', () => redirect).replace('/*RUNTIME*/', () => runtime)
   html = html.replace(/\{\{(\w+)\}\}/g, (m, key) => {
     if (!(key in fields)) throw new Error(`site/index.html: unknown placeholder ${m}`)
     return fields[key]
@@ -60,7 +72,7 @@ function render(lang) {
   html = html.replace(/<a data-lang-link="(\w+)"/g, (m, to) =>
     `${m} href="${rel(lang, to)}"${to === lang ? ' aria-current="page"' : ''}`)
 
-  const left = html.match(/\{\{\w+\}\}|data-i18n="(\w+)">\s*<\/|\/\*RUNTIME\*\//)
+  const left = html.match(/\{\{\w+\}\}|data-i18n="(\w+)">\s*<\/|\/\*(REDIRECT|RUNTIME)\*\//)
   if (left) throw new Error(`${lang}: left over in the page: ${left[0]}`)
   return html
 }

@@ -2,16 +2,16 @@
 
 [![release](https://img.shields.io/github/v/release/M1nu0x0/claude-safe-zsh)](https://github.com/M1nu0x0/claude-safe-zsh/releases)
 [![CI](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml/badge.svg)](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml)
-[![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](../LICENSE)
+[![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](LICENSE)
 [![anthropics/claude-code#103027](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=anthropics%2Fclaude-code%23103027)](https://github.com/anthropics/claude-code/issues/103027)
 
-[한국어](../README.md) | [English](README.en.md) | **日本語**
+[한국어](README.md) | [English](README.en.md) | **日本語**
 
 Claude Code の Bash ツールのシェルが zsh のとき、Claude が bash の書き方で書いたコマンドを zsh でも bash と同じように解釈させる Claude Code のプラグインです。
 
 macOS ではログインシェルが zsh なので、Bash ツールも zsh でコマンドを実行します。ところが Claude は bash の書き方でコマンドを書くため、一致しない glob、クォートしていない変数、`=` で始まる単語でコマンドが止まったり、気づかないうちに違う動きをしたりします。このプラグインはセッション開始時に、Bash ツールの zsh で `no_nomatch`、`sh_word_split`、`no_equals` の 3 つのオプションをオンにします。
 
-**[Website](https://m1nu0x0.github.io/claude-safe-zsh/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](../CHANGELOG.md)**
+**[Website](https://m1nu0x0.github.io/claude-safe-zsh/ja/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](CHANGELOG.md)**
 
 | Claude が書いたコマンド | そのままの zsh | このプラグイン |
 | --- | --- | --- |
@@ -130,7 +130,8 @@ plugins/safe-zsh/
 .github/ci/
   engine-env.sh         本物の Claude Code でフックが書いた内容を確認
 site/                   サイトの元（ページのひな形、翻訳、スクリプト）と生成スクリプト
-docs/                   README の翻訳（en、ja）、site/ から生成した GitHub Pages サイト
+docs/                   site/ から生成した GitHub Pages サイト
+README.en.md, README.ja.md  README の翻訳
 ```
 
 プラグインは `plugins/safe-zsh/` に分けて置き、マーケットプレイスから相対パスで指しています。claude.ai の Add marketplace は、リポジトリのルートをそのままプラグインとして使う構成を受け付けないことがあるためです。
@@ -143,9 +144,10 @@ claude plugin validate plugins/safe-zsh    # プラグイン
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # ログインなしで本物の Claude Code でフックを確認
 node site/build.mjs                       # site/ から docs/ のサイトを生成
+node site/og.mjs                          # 言語ごとのリンクプレビュー画像を生成（Playwright が必要）
 ```
 
-サイトは `site/` を編集し、`node site/build.mjs` で `docs/` に言語別のページ（`/`、`/ko/`、`/ja/`）と `sitemap.xml` を生成して一緒にコミットします。`docs/` の HTML を直接編集すると CI が失敗します。内容を変えたら `site/i18n.json` の `updated` もその日の日付にします。
+サイトは `site/` を編集し、`node site/build.mjs` で `docs/` に言語別のページ（`/`、`/ko/`、`/ja/`）と `sitemap.xml` を生成して一緒にコミットします。`docs/` の HTML を直接編集すると CI が失敗します。ページの JSON-LD にプラグインのバージョンが入るので、バージョンを上げたときも生成し直します。内容を変えたら `site/i18n.json` の `updated` もその日の日付にします。変えないと、プルリクエストで CI が警告します。`site/i18n.json` の `ask` や `ogImageText` を変えたら、`node site/og.mjs` で `docs/images/og*.png` も生成し直してコミットします。
 
 テストには `sh`、`bash`、`zsh` が必要です。テストは `zsh -f` で実行し、テストする人の `~/.zshenv` が混ざらないようにしています。
 

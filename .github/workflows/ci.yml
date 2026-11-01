@@ -62,6 +62,12 @@ jobs:
             exit 1
           fi
 
+      - name: The sitemap's lastmod moves with the site's text
+        if: runner.os == 'Linux' && github.event_name == 'pull_request'
+        run: |
+          git fetch -q --depth=1 origin "$GITHUB_BASE_REF"
+          node .github/ci/site-updated.mjs FETCH_HEAD
+
       - name: Engine env file (SessionStart without login)
         timeout-minutes: 3
         run: bash .github/ci/engine-env.sh

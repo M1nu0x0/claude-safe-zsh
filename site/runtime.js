@@ -7,36 +7,33 @@
   };
   const root = document.documentElement;
   const here = root.lang;
-  // The language links are the list of pages: each link's href is its language's page, and the
-  // English one is the site root.
-  const pages = {};
-  document.querySelectorAll('[data-lang-link]').forEach(a => { pages[a.dataset.langLink] = a.href; });
-  const known = l => Object.hasOwn(pages, l);
 
-  // Language: ?lang= (links to the old single page) goes to that page. Otherwise only / picks a page
-  // for the visitor, by saved choice and then browser language. A language page opened directly stays
-  // as it is, and so does / reached from another page of this site, since that is someone choosing
-  // English, also when the link was opened in a new tab and its click handler below did not run.
-  const fromSite = () => {
-    try { return new URL(document.referrer).href.startsWith(pages.en); } catch { return false; }
-  };
-  const wanted = () => {
-    const q = new URLSearchParams(location.search).get('lang');
-    if (q && known(q)) return q;
-    if (here !== 'en' || fromSite()) return null;
-    const saved = store.get('lang');
-    if (saved && known(saved)) return saved;
-    const nav = (navigator.languages || [navigator.language || 'en']).map(l => l.slice(0, 2));
-    return nav.find(known) || null;
-  };
-  const want = wanted();
-  if (want && want !== here) {
-    location.replace(pages[want] + location.hash);
-    return;
-  }
+  // Language: the redirect, if any, already ran in <head> (site/redirect.js). Choosing a language on
+  // the page saves it, and / goes there from then on.
   document.querySelectorAll('[data-lang-link]').forEach(a => a.addEventListener('click', () => {
     store.set('lang', a.dataset.langLink);
   }));
+
+  // When the browser's preferred language has its own page and the visitor has not chosen one, offer
+  // it in that language at the bottom of the page, instead of redirecting on a guess.
+  const offerLanguage = () => {
+    if (store.get('lang') || store.get('offerClosed')) return;
+    const offers = JSON.parse(document.body.dataset.offers);
+    const nav = (navigator.languages || [navigator.language || '']).map(l => l.slice(0, 2));
+    const l = nav.find(l => l === here || Object.hasOwn(offers, l));
+    if (!l || l === here) return;
+    const o = offers[l];
+    const box = document.getElementById('offer');
+    const [text, link, close] = box.children;
+    box.lang = l;
+    text.textContent = o.text;
+    link.textContent = o.go;
+    link.href = o.href;
+    link.addEventListener('click', () => store.set('lang', l));
+    close.textContent = o.close;
+    close.addEventListener('click', () => { box.hidden = true; store.set('offerClosed', '1'); });
+    box.hidden = false;
+  };
 
   // Theme: system unless chosen.
   const themeBtn = document.getElementById('theme');
@@ -103,5 +100,6 @@
   };
 
   drawTheme();
+  offerLanguage();
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) heroFinal(); else heroPlay();
 })();
