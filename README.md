@@ -5,9 +5,13 @@
 [![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](LICENSE)
 [![anthropics/claude-code#103027](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=anthropics%2Fclaude-code%23103027)](https://github.com/anthropics/claude-code/issues/103027)
 
+**한국어** | [English](docs/README.en.md) | [日本語](docs/README.ja.md)
+
 Claude Code의 Bash 도구 셸이 zsh일 때, Claude가 bash 문법으로 쓴 명령을 zsh도 bash처럼 해석하게 해 주는 Claude Code 플러그인입니다.
 
 macOS에서는 로그인 셸이 zsh라서 Bash 도구도 zsh로 명령을 실행합니다. 그런데 Claude는 bash 문법으로 명령을 쓰기 때문에, 매치 없는 glob, 따옴표 없는 변수, `=`로 시작하는 단어에서 명령이 멈추거나 조용히 다르게 동작합니다. 이 플러그인은 세션이 시작될 때 Bash 도구의 zsh에 `no_nomatch`, `sh_word_split`, `no_equals` 세 옵션을 켭니다.
+
+**[Website](https://m1nu0x0.github.io/claude-safe-zsh/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](CHANGELOG.md)**
 
 | Claude가 쓴 명령 | zsh 기본값 | 이 플러그인 |
 | --- | --- | --- |
@@ -125,6 +129,7 @@ plugins/safe-zsh/
   tests/                node --test 용 테스트
 .github/ci/
   engine-env.sh         실제 Claude Code로 훅이 쓴 내용을 확인
+docs/                   README 번역본(en, ja), GitHub Pages 사이트
 ```
 
 플러그인은 `plugins/safe-zsh/`에 따로 두고 마켓플레이스가 상대경로로 가리킵니다. claude.ai의 Add marketplace는 레포 루트를 통째로 플러그인으로 쓰는 구성을 받아주지 않는 경우가 있어서입니다.
