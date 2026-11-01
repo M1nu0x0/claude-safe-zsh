@@ -7,23 +7,31 @@
   };
   const root = document.documentElement;
   const here = root.lang;
-  const siteRoot = document.body.dataset.root;
-  const PATHS = { en: '', ko: 'ko/', ja: 'ja/' };
+  // The language links are the list of pages: each link's href is its language's page, and the
+  // English one is the site root.
+  const pages = {};
+  document.querySelectorAll('[data-lang-link]').forEach(a => { pages[a.dataset.langLink] = a.href; });
+  const known = l => Object.hasOwn(pages, l);
 
-  // Language: ?lang= (links to the old single page) > saved choice > browser language, and only the
-  // English page at / redirects by browser language. Choosing a language on the page saves it.
+  // Language: ?lang= (links to the old single page) goes to that page. Otherwise only / picks a page
+  // for the visitor, by saved choice and then browser language. A language page opened directly stays
+  // as it is, and so does / reached from another page of this site, since that is someone choosing
+  // English, also when the link was opened in a new tab and its click handler below did not run.
+  const fromSite = () => {
+    try { return new URL(document.referrer).href.startsWith(pages.en); } catch { return false; }
+  };
   const wanted = () => {
     const q = new URLSearchParams(location.search).get('lang');
-    if (q && q in PATHS) return q;
+    if (q && known(q)) return q;
+    if (here !== 'en' || fromSite()) return null;
     const saved = store.get('lang');
-    if (saved && saved in PATHS) return saved;
-    if (here !== 'en') return null;
+    if (saved && known(saved)) return saved;
     const nav = (navigator.languages || [navigator.language || 'en']).map(l => l.slice(0, 2));
-    return nav.find(l => l in PATHS) || null;
+    return nav.find(known) || null;
   };
   const want = wanted();
   if (want && want !== here) {
-    location.replace(siteRoot + PATHS[want] + location.hash);
+    location.replace(pages[want] + location.hash);
     return;
   }
   document.querySelectorAll('[data-lang-link]').forEach(a => a.addEventListener('click', () => {

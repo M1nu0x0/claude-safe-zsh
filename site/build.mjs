@@ -15,8 +15,10 @@ const LANGS = Object.keys(languages)
 const attr = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 const text = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const json = s => JSON.stringify(s).replace(/</g, '\\u003c')
-// A path from one language page to another, relative so the pages also open from disk.
+// A path from one language page to another, relative so the links follow wherever docs/ is served from.
 const rel = (from, to) => from === to ? './' : (languages[from].path ? '../' : './') + languages[to].path
+// The hreflang alternates, the same on every page and in the sitemap; x-default is the English page at /.
+const alternates = LANGS.map(l => [l, site + languages[l].path]).concat([['x-default', site]])
 
 function render(lang) {
   const L = languages[lang]
@@ -24,7 +26,8 @@ function render(lang) {
   const url = site + L.path
   const fields = {
     lang,
-    root: languages[lang].path ? '../' : './',
+    site,
+    alternates: alternates.map(([l, href]) => `<link rel="alternate" hreflang="${l}" href="${href}">`).join('\n'),
     title: text(L.title),
     description: attr(L.description),
     url,
@@ -68,13 +71,11 @@ for (const lang of LANGS) {
   writeFileSync(out, render(lang))
 }
 
-const alternates = LANGS.map(l => `    <xhtml:link rel="alternate" hreflang="${l}" href="${site + languages[l].path}"/>`)
-  .concat(`    <xhtml:link rel="alternate" hreflang="x-default" href="${site}"/>`)
-  .join('\n')
+const links = alternates.map(([l, href]) => `    <xhtml:link rel="alternate" hreflang="${l}" href="${href}"/>`).join('\n')
 const urls = LANGS.map(l => `  <url>
     <loc>${site + languages[l].path}</loc>
     <lastmod>${updated}</lastmod>
-${alternates}
+${links}
   </url>`).join('\n')
 writeFileSync(join(docs, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
