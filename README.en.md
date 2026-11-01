@@ -129,8 +129,7 @@ plugins/safe-zsh/
   tests/                tests for node --test
 .github/ci/
   engine-env.sh         checks what the hook wrote, with the real Claude Code
-site/                   site source (page template, translations, script) and its builder
-docs/                   GitHub Pages site built from site/
+site/                   GitHub Pages site (Astro): src/site.json translations, src/pages/ page
 README.en.md, README.ja.md  README translations
 ```
 
@@ -143,11 +142,12 @@ claude plugin validate .                  # marketplace
 claude plugin validate plugins/safe-zsh    # plugin
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # checks the hook with the real Claude Code, without a login
-node site/build.mjs                       # builds the site in docs/ from site/
-node site/og.mjs                          # draws the link-preview image for each language (needs Playwright)
+cd site && npm ci && npm run build       # builds and checks the site (site/dist)
+cd site && npm run dev                    # local preview
+cd site && npm run og                     # draws the link-preview image for each language (needs Playwright)
 ```
 
-For the site, edit `site/`, run `node site/build.mjs` to build the per-language pages (`/`, `/ko/`, `/ja/`) and `sitemap.xml` in `docs/`, and commit both. CI fails if the HTML in `docs/` is edited by hand. Rebuild after a version bump too, since the page's JSON-LD carries the plugin version. When the content changes, also set `updated` in `site/i18n.json` to that day; CI warns on a pull request that changes the content without it. After changing `ask` or `ogImageText` in `site/i18n.json`, run `node site/og.mjs` and commit `docs/images/og*.png` as well.
+The site is built with [Astro](https://astro.build) and the shared kit [claude-plugin-site](https://github.com/M1nu0x0/claude-plugin-site). All its words are in `site/src/site.json`, and the order of its sections is in `site/src/pages/[...lang].astro`. `npm run build` builds the per-language pages (`/`, `/ko/`, `/ja/`) and `sitemap.xml`, then checks them as a crawler reads them (title and description length, canonical, hreflang, OG, JSON-LD, broken links and images, HTML validity) and fails if any check fails. Once merged to main, the Pages workflow builds and deploys it. The page's JSON-LD carries the plugin version, so a version bump redeploys the site. When the content changes, also set `updated` in `site/src/site.json` to that day; CI warns on a pull request that changes the content without it. After changing `ask` or `ogImageText`, run `npm run og` and commit `site/public/images/og*.png` as well.
 
 The tests need `sh`, `bash` and `zsh`. They run `zsh -f`, so the tester's own `~/.zshenv` does not mix in.
 

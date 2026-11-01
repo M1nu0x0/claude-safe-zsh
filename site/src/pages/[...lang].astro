@@ -1,0 +1,98 @@
+---
+// One page per language (/, /ko/, /ja/). The words are in src/site.json; this file is the order of the sections.
+import site from 'virtual:plugin-site'
+import { staticPaths } from '@m1nu0x0/claude-plugin-site'
+import PluginPage from '@m1nu0x0/claude-plugin-site/components/PluginPage.astro'
+import Hero from '@m1nu0x0/claude-plugin-site/components/Hero.astro'
+import Install from '@m1nu0x0/claude-plugin-site/components/Install.astro'
+import Cmd from '@m1nu0x0/claude-plugin-site/components/Cmd.astro'
+import Faq from '@m1nu0x0/claude-plugin-site/components/Faq.astro'
+
+export const getStaticPaths = () => staticPaths(site)
+
+const { lang } = Astro.props
+const t = site.languages[lang].strings
+
+// Two terminals: the same three commands under plain zsh and under this plugin. Shell output, not translated.
+const before = `<span class="p">$</span> grep -rn TODO src --include=*.ts
+<span class="err">(eval):1: no matches found: --include=*.ts</span>
+<span class="p">$</span> echo =====; ls
+<span class="err">(eval):1: ==== not found</span>
+<span class="p">$</span> T="a.py b.py"; pytest $T
+<span class="err">ERROR: file or directory not found: a.py b.py</span>`
+const after = `<span class="p">$</span> grep -rn TODO src --include=*.ts
+src/app.ts:12:  // TODO retry on timeout
+<span class="p">$</span> echo =====; ls
+=====
+README.md  src
+<span class="p">$</span> T="a.py b.py"; pytest $T
+2 passed`
+const hookLine = 'if [ -n "${ZSH_VERSION:-}" ]; then setopt no_nomatch sh_word_split no_equals; fi'
+
+// Related anthropics/claude-code issues, each with a live state badge and a line in strings (i<number>).
+const issues = [103027, 67146, 103576, 74888, 101554, 74746, 7490, 91498, 52521, 2444, 24573]
+const issueUrl = (n: number) => `https://github.com/anthropics/claude-code/issues/${n}`
+const badge = (n: number) => `https://img.shields.io/github/issues/detail/state/anthropics/claude-code/${n}?label=`
+---
+<PluginPage lang={lang}>
+  <Hero slot="hero" lang={lang} />
+
+  <Install lang={lang} />
+
+  <section aria-labelledby="screens">
+    <h2 id="screens" set:html={t.screensTitle} />
+    <div class="screens even">
+      <figure>
+        <pre tabindex="0"><code set:html={before} /></pre>
+        <figcaption set:html={t.beforeCap} />
+      </figure>
+      <figure>
+        <pre tabindex="0"><code set:html={after} /></pre>
+        <figcaption set:html={t.afterCap} />
+      </figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="why">
+    <h2 id="why" set:html={t.whyTitle} />
+    <p set:html={t.why1} />
+    <p set:html={t.why2} />
+    <p set:html={t.why3} />
+  </section>
+
+  <section aria-labelledby="how">
+    <h2 id="how" set:html={t.howTitle} />
+    <p set:html={t.how1} />
+    <Cmd lang={lang} code={hookLine} />
+    <p set:html={t.how2} />
+  </section>
+
+  <section aria-labelledby="fixes">
+    <h2 id="fixes" set:html={t.fixesTitle} />
+    <dl class="os">
+      <dt><code>no_nomatch</code></dt><dd set:html={t.fixNomatch} />
+      <dt><code>sh_word_split</code></dt><dd set:html={t.fixSplit} />
+      <dt><code>no_equals</code></dt><dd set:html={t.fixEquals} />
+    </dl>
+    <p class="not-fixed" set:html={t.notFixed} />
+  </section>
+
+  <section aria-labelledby="issues">
+    <h2 id="issues" set:html={t.issuesTitle} />
+    <p set:html={t.issuesLead} />
+    <dl class="os">
+      {issues.map(n => (
+        <dt><a href={issueUrl(n)}>#{n}</a></dt>
+        <dd><img src={badge(n)} alt="" height="20" loading="lazy" decoding="async"><span set:html={t[`i${n}`]} /></dd>
+      ))}
+    </dl>
+  </section>
+
+  <Faq lang={lang} />
+</PluginPage>
+
+<style is:global>
+  /* Issue list: the state badge before each line. */
+  dl.os dd img { vertical-align: -3px; margin-right: 6px; }
+  .not-fixed { margin-top: 18px; }
+</style>

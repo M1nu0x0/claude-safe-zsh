@@ -7,10 +7,10 @@ All notable changes to this project are recorded here. The format follows [Keep 
 ### Changed
 
 - The site has one pre-rendered page per language (`/`, `/ko/`, `/ja/`) instead of one page that switches language in the browser, so search engines and link previews read each language without running JavaScript; each page has its own canonical URL, title, description and Open Graph tags, and the old `?lang=` links redirect to the matching page
-- The site is built from `site/` with `node site/build.mjs`, and CI fails if `docs/` is out of date
+- The site is built with Astro and the shared kit [claude-plugin-site](https://github.com/M1nu0x0/claude-plugin-site): its words are in `site/src/site.json`, and a GitHub Actions workflow builds and deploys it instead of committing the HTML to `docs/`; the build checks every page as a crawler reads it (title and description length, canonical, hreflang, Open Graph, JSON-LD, links and images, HTML validity) and fails on any problem
 - The sitemap lists the three pages with `lastmod`, and CI warns on a pull request that changes the site's text without changing that date
 - The site no longer redirects by browser language: it offers that language's page in a small bar at the bottom, and only `/` goes to the language a visitor chose before, from a script in `<head>` so no other page is drawn first
-- Each language has its own link-preview image, drawn from `site/og.html` with `node site/og.mjs`
+- Each language has its own link-preview image, drawn with `npm run og` in `site/`
 - The page says which errors it fixes (`no matches found`, `==== not found`) in its first lines, and the questions explain both errors
 - The English, Korean and Japanese descriptions are short enough to show in full in search results
 - Each page loads only the fonts its language uses, and the issue badges load lazily
