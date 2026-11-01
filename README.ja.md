@@ -129,8 +129,7 @@ plugins/safe-zsh/
   tests/                node --test 用のテスト
 .github/ci/
   engine-env.sh         本物の Claude Code でフックが書いた内容を確認
-site/                   サイトの元（ページのひな形、翻訳、スクリプト）と生成スクリプト
-docs/                   site/ から生成した GitHub Pages サイト
+site/                   GitHub Pages サイト（Astro）: src/site.json 翻訳、src/pages/ ページ
 README.en.md, README.ja.md  README の翻訳
 ```
 
@@ -143,11 +142,12 @@ claude plugin validate .                  # マーケットプレイス
 claude plugin validate plugins/safe-zsh    # プラグイン
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # ログインなしで本物の Claude Code でフックを確認
-node site/build.mjs                       # site/ から docs/ のサイトを生成
-node site/og.mjs                          # 言語ごとのリンクプレビュー画像を生成（Playwright が必要）
+cd site && npm ci && npm run build       # サイトのビルドと検査（site/dist）
+cd site && npm run dev                    # ローカルでプレビュー
+cd site && npm run og                     # 言語ごとのリンクプレビュー画像を生成（Playwright が必要）
 ```
 
-サイトは `site/` を編集し、`node site/build.mjs` で `docs/` に言語別のページ（`/`、`/ko/`、`/ja/`）と `sitemap.xml` を生成して一緒にコミットします。`docs/` の HTML を直接編集すると CI が失敗します。ページの JSON-LD にプラグインのバージョンが入るので、バージョンを上げたときも生成し直します。内容を変えたら `site/i18n.json` の `updated` もその日の日付にします。変えないと、プルリクエストで CI が警告します。`site/i18n.json` の `ask` や `ogImageText` を変えたら、`node site/og.mjs` で `docs/images/og*.png` も生成し直してコミットします。
+サイトは [Astro](https://astro.build) と共通キット [claude-plugin-site](https://github.com/M1nu0x0/claude-plugin-site) で作ります。文言はすべて `site/src/site.json` に、セクションの順序は `site/src/pages/[...lang].astro` にあります。`npm run build` は言語別のページ（`/`、`/ko/`、`/ja/`）と `sitemap.xml` を生成したあと、クローラーが読むとおりに検査し（タイトルと説明の長さ、canonical、hreflang、OG、JSON-LD、リンク切れと画像切れ、HTML の妥当性）、ひとつでも外れると失敗します。main にマージされると Pages ワークフローがビルドしてデプロイします。ページの JSON-LD にプラグインのバージョンが入るので、バージョンを上げるとサイトもデプロイし直されます。内容を変えたら `site/src/site.json` の `updated` もその日の日付にします。変えないと、プルリクエストで CI が警告します。`ask` や `ogImageText` を変えたら、`npm run og` で `site/public/images/og*.png` も生成し直してコミットします。
 
 テストには `sh`、`bash`、`zsh` が必要です。テストは `zsh -f` で実行し、テストする人の `~/.zshenv` が混ざらないようにしています。
 
