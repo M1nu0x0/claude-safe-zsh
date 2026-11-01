@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  # Daily against the latest Claude Code, which can change how CLAUDE_ENV_FILE works between releases,
+  # and to see whether the upstream issue has been fixed.
+  schedule:
+    - cron: "17 18 * * *" # 03:17 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Record the Claude Code version
+        shell: bash
+        run: echo "::notice title=Claude Code (${{ runner.os }})::$(claude --version)"
+
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
+
+      - name: Record the zsh version
+        run: echo "::notice title=zsh (${{ runner.os }})::$(zsh --version)"
+
+      - name: Validate the marketplace
+        run: claude plugin validate .
+
+      - name: Validate the plugin
+        run: claude plugin validate plugins/safe-zsh
+
+      - name: Unit tests
+        run: node --test 'plugins/safe-zsh/tests/*.test.mjs'
+
+      - name: Engine env file (SessionStart without login)
+        timeout-minutes: 3
+        run: bash .github/ci/engine-env.sh
+
+  upstream:
+    name: upstream issue
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+    steps:
+      - name: Check anthropics/claude-code#103027
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(gh api repos/anthropics/claude-code/issues/103027 --jq '.state + " " + (.state_reason // "")')
+          echo "::notice title=anthropics/claude-code#103027::$state"
+          case "$state" in
+            "closed completed")
+              echo "::warning title=upstream fixed::anthropics/claude-code#103027 is closed as completed. Check whether Claude Code now handles zsh, and if so retire this plugin." ;;
+          esac
