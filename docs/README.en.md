@@ -129,7 +129,8 @@ plugins/safe-zsh/
   tests/                tests for node --test
 .github/ci/
   engine-env.sh         checks what the hook wrote, with the real Claude Code
-docs/                   README translations (en, ja), GitHub Pages site
+site/                   site source (page template, translations, script) and its builder
+docs/                   README translations (en, ja), GitHub Pages site built from site/
 ```
 
 The plugin lives in its own folder, `plugins/safe-zsh/`, and the marketplace points at it with a relative path, because claude.ai's Add marketplace can reject a repository whose root is itself the plugin.
@@ -141,7 +142,10 @@ claude plugin validate .                  # marketplace
 claude plugin validate plugins/safe-zsh    # plugin
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # checks the hook with the real Claude Code, without a login
+node site/build.mjs                       # builds the site in docs/ from site/
 ```
+
+For the site, edit `site/`, run `node site/build.mjs` to build the per-language pages (`/`, `/ko/`, `/ja/`) and `sitemap.xml` in `docs/`, and commit both. CI fails if the HTML in `docs/` is edited by hand. When the content changes, also set `updated` in `site/i18n.json` to that day.
 
 The tests need `sh`, `bash` and `zsh`. They run `zsh -f`, so the tester's own `~/.zshenv` does not mix in.
 

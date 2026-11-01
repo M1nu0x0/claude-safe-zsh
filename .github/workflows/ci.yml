@@ -52,6 +52,16 @@ jobs:
       - name: Unit tests
         run: node --test 'plugins/safe-zsh/tests/*.test.mjs'
 
+      - name: The site in docs/ is built from site/
+        if: runner.os == 'Linux'
+        run: |
+          node site/build.mjs
+          if [ -n "$(git status --porcelain -- docs)" ]; then
+            git status --short -- docs
+            echo "::error title=site out of date::docs/ does not match site/. Run node site/build.mjs and commit the result."
+            exit 1
+          fi
+
       - name: Engine env file (SessionStart without login)
         timeout-minutes: 3
         run: bash .github/ci/engine-env.sh

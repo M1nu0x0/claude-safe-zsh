@@ -129,7 +129,8 @@ plugins/safe-zsh/
   tests/                node --test 용 테스트
 .github/ci/
   engine-env.sh         실제 Claude Code로 훅이 쓴 내용을 확인
-docs/                   README 번역본(en, ja), GitHub Pages 사이트
+site/                   사이트 원본(페이지 틀, 번역, 스크립트)과 생성기
+docs/                   README 번역본(en, ja), site/에서 생성한 GitHub Pages 사이트
 ```
 
 플러그인은 `plugins/safe-zsh/`에 따로 두고 마켓플레이스가 상대경로로 가리킵니다. claude.ai의 Add marketplace는 레포 루트를 통째로 플러그인으로 쓰는 구성을 받아주지 않는 경우가 있어서입니다.
@@ -141,7 +142,10 @@ claude plugin validate .                  # 마켓플레이스
 claude plugin validate plugins/safe-zsh    # 플러그인
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # 로그인 없이 실제 Claude Code로 훅 확인
+node site/build.mjs                       # site/에서 docs/ 사이트 생성
 ```
+
+사이트는 `site/`를 고친 뒤 `node site/build.mjs`로 `docs/`의 언어별 페이지(`/`, `/ko/`, `/ja/`)와 `sitemap.xml`을 만들어 함께 커밋합니다. `docs/`의 HTML을 직접 고치면 CI가 실패합니다. 내용이 바뀌면 `site/i18n.json`의 `updated`도 그날 날짜로 바꿉니다.
 
 테스트에는 `sh`, `bash`, `zsh`가 필요합니다. 테스트는 `zsh -f`로 실행해 테스트하는 사람의 `~/.zshenv`가 섞이지 않게 합니다.
 

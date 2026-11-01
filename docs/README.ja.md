@@ -129,7 +129,8 @@ plugins/safe-zsh/
   tests/                node --test 用のテスト
 .github/ci/
   engine-env.sh         本物の Claude Code でフックが書いた内容を確認
-docs/                   README の翻訳（en、ja）、GitHub Pages サイト
+site/                   サイトの元（ページのひな形、翻訳、スクリプト）と生成スクリプト
+docs/                   README の翻訳（en、ja）、site/ から生成した GitHub Pages サイト
 ```
 
 プラグインは `plugins/safe-zsh/` に分けて置き、マーケットプレイスから相対パスで指しています。claude.ai の Add marketplace は、リポジトリのルートをそのままプラグインとして使う構成を受け付けないことがあるためです。
@@ -141,7 +142,10 @@ claude plugin validate .                  # マーケットプレイス
 claude plugin validate plugins/safe-zsh    # プラグイン
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
 bash .github/ci/engine-env.sh             # ログインなしで本物の Claude Code でフックを確認
+node site/build.mjs                       # site/ から docs/ のサイトを生成
 ```
+
+サイトは `site/` を編集し、`node site/build.mjs` で `docs/` に言語別のページ（`/`、`/ko/`、`/ja/`）と `sitemap.xml` を生成して一緒にコミットします。`docs/` の HTML を直接編集すると CI が失敗します。内容を変えたら `site/i18n.json` の `updated` もその日の日付にします。
 
 テストには `sh`、`bash`、`zsh` が必要です。テストは `zsh -f` で実行し、テストする人の `~/.zshenv` が混ざらないようにしています。
 

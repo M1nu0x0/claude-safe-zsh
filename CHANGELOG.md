@@ -4,6 +4,12 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+
+- The site has one pre-rendered page per language (`/`, `/ko/`, `/ja/`) instead of one page that switches language in the browser, so search engines and link previews read each language without running JavaScript; each page has its own canonical URL, title, description and Open Graph tags, and the old `?lang=` links redirect to the matching page
+- The site is built from `site/` with `node site/build.mjs`, and CI fails if `docs/` is out of date
+- The sitemap lists the three pages with `lastmod`
+
 ## [0.1.0] - 2026-11-01
 
 ### Added
