@@ -6,6 +6,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- The tests carry `// @ts-check` and JSDoc types, and CI type checks them with `tsc` (`checkJs`, `strict`); they stay JavaScript and run as they are
 - The site's "How it works" explains the hint the hook prints for the model, and its answers about `zsh -c` and about sending data no longer say the hook only writes to a file
 
 ## [0.1.1] - 2026-11-01
