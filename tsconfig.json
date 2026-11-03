@@ -1,0 +1,16 @@
+{
+  // Type checks the JavaScript tests from their JSDoc, under strict, and emits nothing: Node runs the .mjs files as
+  // they are. The hook is a shell script, and the site has its own setup under site/.
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    "noEmit": true,
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["plugins/*/tests/**/*.mjs"]
+}

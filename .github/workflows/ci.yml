@@ -49,6 +49,12 @@ jobs:
       - name: Validate the plugin
         run: claude plugin validate plugins/safe-zsh
 
+      - name: Type check the tests (JSDoc, checkJs, strict)
+        if: runner.os == 'Linux'
+        run: |
+          npm ci
+          npm run typecheck
+
       - name: Unit tests
         run: node --test 'plugins/safe-zsh/tests/*.test.mjs'
 

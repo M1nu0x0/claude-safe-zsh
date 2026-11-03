@@ -1,0 +1,14 @@
+{
+  "name": "claude-safe-zsh",
+  "private": true,
+  "type": "module",
+  "description": "Tests and their type check for the safe-zsh plugin. The plugin itself is a shell script and needs none of this.",
+  "scripts": {
+    "test": "node --test \"plugins/safe-zsh/tests/*.test.mjs\"",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}

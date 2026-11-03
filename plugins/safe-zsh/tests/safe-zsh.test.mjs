@@ -1,3 +1,4 @@
+// @ts-check
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +13,9 @@ const LINE = 'if [ -n "${ZSH_VERSION:-}" ]; then setopt no_nomatch sh_word_split
 const OPTS = 'setopt no_nomatch sh_word_split no_equals'
 
 // Runs the hook the way Claude Code does, with CLAUDE_ENV_FILE set (or not), and returns what it wrote.
+/** @param {string} [envFile] @param {NodeJS.ProcessEnv} [extraEnv] */
 function hook(envFile, extraEnv = {}) {
+  /** @type {NodeJS.ProcessEnv} */
   const env = { ...process.env, ...extraEnv }
   delete env.CLAUDE_ENV_FILE
   if (envFile) env.CLAUDE_ENV_FILE = envFile
@@ -20,6 +23,7 @@ function hook(envFile, extraEnv = {}) {
 }
 
 // What the hook prints for the model, given the shell Claude Code would pick (an empty value counts as unset).
+/** @param {NodeJS.ProcessEnv} shellEnv @returns {string} */
 function hint(shellEnv) {
   const dir = mkdtempSync(join(tmpdir(), 'safe-zsh-'))
   try {
@@ -32,6 +36,7 @@ function hint(shellEnv) {
 }
 
 // A fresh env file with the hook's line in it, as the Bash tool would see it.
+/** @template T @param {(file: string) => T} run @returns {T} */
 function withEnvFile(run) {
   const dir = mkdtempSync(join(tmpdir(), 'safe-zsh-'))
   try {
@@ -44,6 +49,7 @@ function withEnvFile(run) {
 }
 
 // `zsh -f` skips the tester's own ~/.zshenv, so its settings cannot mix into the result.
+/** @param {string} file @param {string} script */
 const zsh = (file, script) =>
   spawnSync('zsh', ['-fc', `. "${file}"; ${script}`], { encoding: 'utf8', env: { ...process.env } })
 
