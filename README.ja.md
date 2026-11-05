@@ -11,6 +11,8 @@ Claude Code の Bash ツールのシェルが zsh のとき、Claude が bash �
 
 macOS ではログインシェルが zsh なので、Bash ツールも zsh でコマンドを実行します。ところが Claude は bash の書き方でコマンドを書くため、一致しない glob、クォートしていない変数、`=` で始まる単語でコマンドが止まったり、気づかないうちに違う動きをしたりします。このプラグインはセッション開始時に、Bash ツールの zsh で `no_nomatch`、`sh_word_split`、`no_equals` の 3 つのオプションをオンにします。
 
+また Claude Code の安全チェックは `${(s/:/)PATH}` のような zsh の `${(flags)...}` 展開を解析できず、`rm` のないコマンドでも `rm` の危険があるとして拒否します。このプラグインの PreToolUse フックがその前にこうしたコマンドを拒否し、本当の理由と POSIX の書き方をモデルに伝えます。
+
 **[Website](https://m1nu0x0.github.io/claude-safe-zsh/ja/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](CHANGELOG.md)**
 
 | Claude が書いたコマンド | そのままの zsh | このプラグイン |
@@ -18,6 +20,7 @@ macOS ではログインシェルが zsh なので、Bash ツールも zsh で�
 | `grep -rn TODO src --include=*.ts` | `(eval):1: no matches found: --include=*.ts`、grep が実行されない | grep が `*.ts` のパターンを受け取って実行される |
 | `echo =====; ls` | `(eval):1: ==== not found`、後のコマンドも止まる | `=====` を出力し `ls` まで実行される |
 | `T="a.py b.py"; pytest $T` | `$T` が 1 語のまま渡され、`a.py b.py` という 1 つのファイルを探す | `a.py` と `b.py` の 2 つの引数に分かれる |
+| `print -l ${(s/:/)PATH} \| rg -c /` | 実行前に `could not be checked for dangerous rm operations` で拒否される（コマンドに `rm` はない） | フックが本当の理由を伝えて拒否し、モデルが `echo "$PATH" \| tr ':' '\n' \| rg -c /` に書き直して実行 |
 
 ## 作った理由
 
@@ -26,6 +29,8 @@ macOS ではログインシェルが zsh なので、Bash ツールも zsh で�
 この issue の作成者は 2026 年 7 月 28 日から 10 月 17 日までの自分の transcript を数え、Bash ツールの呼び出し 61,040 回のうち 2,570 回で zsh のエラーが出たと報告しました。9 月下旬以降は 1,000 回あたり約 51 回に増え、その 76% はコマンドが 0 で終わったため、エラーが出力の途中に埋もれていました。Claude が zsh のせいだと気づいたのは約 3% だけでした。多かった上位 3 つは一致しない glob（`--include=*.ts`、`ls libs/*/README.md`）と `=` の単語（`echo ====`）で、クォートしていない変数はほとんどが気づかれずに失敗するので、数えられた以上にあるはずだとしています。
 
 同じ問題は以前 [#67146](https://github.com/anthropics/claude-code/issues/67146) でも報告されましたが、活動がなく閉じられました。#103027 が Claude Code で修正されればこのプラグインは不要になるので、そのときリポジトリをアーカイブする予定です。CI が毎日 #103027 の状態を確認しています。
+
+zsh の書き方は、シェルが起動する前にも引っかかります。macOS の `auto` モードでは `print -l ${(s/:/)PATH} | rg -c /` が実行されず、`This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed.` で拒否されます（[#104925](https://github.com/anthropics/claude-code/issues/104925)）。コマンドは実行されていないので zsh のエラーではなく、`setopt` や `.zshenv` は zsh が起動してから適用されるので、この拒否を防げません。同じ展開でも `echo '${(s/:/)PATH}'` のようにシングルクォートの中なら実行されます。外部ユーザーの分析（公式な確認ではない）によると、安全チェックは `tree-sitter-bash` で解析しており、この文法に `${(flags)...}` がないため `ERROR` ノードになり、`rm` の危険を否定できないと判断します。根本的な修正は、Claude Code がセッションのシェルに合った文法で解析するか、`rm`・`rmdir` のないコマンドの解析失敗を `rm` の危険として扱わないことです。そう修正されれば PreToolUse フックは外す予定です。
 
 ## インストール
 
@@ -47,6 +52,8 @@ Claude Desktop では、プロンプト横の `+` → Plugins → Add marketplac
 
 ## 動作
 
+### セッション開始（SessionStart）
+
 1. セッション開始時（`SessionStart`: startup、resume、clear、compact）に、フックが `$CLAUDE_ENV_FILE` に次の 1 行を書きます。
 
    ```sh
@@ -58,6 +65,15 @@ Claude Desktop では、プロンプト横の `+` → Plugins → Add marketplac
 4. シェルが zsh（`CLAUDE_CODE_SHELL` があればその値、なければ `$SHELL`）のとき、フックは stdout にもう 1 行出力します。SessionStart フックの stdout はモデルに渡されます。コマンドの中でモデルが起動する `zsh -c` は上のオプションを引き継がないので、スクリプトの先頭に `setopt no_nomatch sh_word_split no_equals;` を付けるか、bash 構文なら `bash -c` を使うようにという案内です。モデルが従わないことがあり、ツールやスクリプトが起動する子 zsh には届きません。
 
 `CLAUDE_ENV_FILE` がなければ、フックは何も書かずに 0 で終わります。resume や compact のときに同じ行がもう一度書かれても、`setopt` が繰り返されるだけです。
+
+### zsh の `${(flags)...}` コマンドの拒否（PreToolUse）
+
+1. Bash ツールのコマンドごとに、PreToolUse フックが Claude Code の安全チェックより先にコマンドを読みます。シングルクォートの中は文字どおりの文字列なので除き、残りに `${(` があれば拒否します。
+2. 拒否の理由はモデルに渡されます。安全チェックがこの展開を解析できず、コマンドが実行されないまま `rm` の危険として拒否されること、POSIX sh での書き方（`echo "$PATH" | tr ':' '\n'`、`while IFS= read -r line; do ...; done < file`）、チェックを避けるために `zsh -c`・`eval`・スクリプトで包まないこと、heredoc の中の文字列なら Write ツールでファイルを書くことを伝えます。
+3. フックは拒否するだけで、承認はしません。`${(` がなければ何も出力しないので、Claude Code はプラグインがないときとまったく同じように判断します。
+4. `zsh -c` で包む自動変換は入れていません。安全チェックを避けられるようにしてしまうおそれがあるからです。
+
+Claude Code `2.1.318`、macOS の `claude -p --permission-mode auto` では PreToolUse だけが呼ばれ、PermissionRequest と PermissionDenied は呼ばれませんでした。拒否の後、モデルは `echo "$PATH" | tr ':' '\n' | rg -c /` に書き直して再実行し、結果を得ました。
 
 ## 防げるものと防げないもの
 
@@ -71,6 +87,8 @@ Claude Desktop では、プロンプト横の `+` → Plugins → Add marketplac
 | `path` が `PATH` と結び付いた配列 | `for path in ...` の後で `jq` が見つからない | 3 つの外 | 防げない |
 | `status` が読み取り専用の変数 | `status=$(...)` → `read-only variable: status` | 3 つの外 | 防げない |
 | bash にしかない書き方 | `${!v}`、`declare -A`、`compgen` | なし | 防げない |
+| 安全チェックが zsh の `${(flags)...}` を解析できず `rm` の危険として拒否する | `print -l ${(s/:/)PATH}` → `could not be checked for dangerous rm operations` | 関係なし（実行前） | 理由を伝えて拒否し、モデルが POSIX に書き直す |
+| 安全チェックが解析できない他の書き方 | `$${`、入れ子の subshell | 関係なし（実行前） | 防げない（従来の `rm` メッセージで拒否） |
 
 `emulate sh` ではなく 3 つのオプションだけをオンにするのは、`emulate sh` は変わるオプションが多く、Bash ツールが snapshot から読み込むユーザーの zsh 関数の動きまで変えてしまうおそれがあるからです。
 
@@ -104,6 +122,15 @@ Claude Desktop では、プロンプト横の `+` → Plugins → Add marketplac
 | [anthropics/claude-code#2444](https://github.com/anthropics/claude-code/issues/2444) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/2444?label=) | Bash ツールが bash ではなく既定のシェルで実行されるという報告 |
 | [anthropics/claude-code#24573](https://github.com/anthropics/claude-code/issues/24573) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/24573?label=) | ユーザーのシェルが bash でも Bash ツールが zsh になる問題 |
 
+**安全チェックの解析**
+
+| Issue | 状態 | 内容 |
+| --- | --- | --- |
+| [anthropics/claude-code#104925](https://github.com/anthropics/claude-code/issues/104925) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/104925?label=) | `rm` のないコマンドでも解析に失敗すると `dangerous rm operations` で拒否される。コメントに macOS の zsh `${(@f)...}` の例がある。PreToolUse フックを作った理由で、外す条件 |
+| [anthropics/claude-code#99249](https://github.com/anthropics/claude-code/issues/99249) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/99249?label=) | `zsh -c` のスクリプトも bash の文法で判断されているように見える |
+| [anthropics/claude-code#100419](https://github.com/anthropics/claude-code/issues/100419) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/100419?label=) | PermissionRequest フックの入力に拒否の理由がなく、原因を区別できない。このプラグインが PreToolUse で拒否する理由 |
+| [anthropics/claude-code#99899](https://github.com/anthropics/claude-code/issues/99899) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/99899?label=) | サブエージェントではこの承認画面に自動拒否の時間がなく、無期限に止まる |
+
 新しい関連 issue を見つけたら、issue か PR で教えてください。
 
 ## 他の方法
@@ -125,8 +152,9 @@ plugins/safe-zsh/
   .claude-plugin/
     plugin.json         プラグインのマニフェスト
   hooks/
-    hooks.json          SessionStart フック 1 つ
+    hooks.json          SessionStart フックと PreToolUse フック（Bash）
     session-start.sh    CLAUDE_ENV_FILE に setopt を 1 行追加し、モデルに子 zsh の案内を 1 行出力
+    pre-tool-use.sh     zsh の ${(flags)...} コマンドを理由とともに拒否（承認はしない）
   tests/                node --test 用のテスト
 .github/ci/
   engine-env.sh         本物の Claude Code でフックが書いた内容を確認
@@ -144,6 +172,7 @@ claude plugin validate .                  # マーケットプレイス
 claude plugin validate plugins/safe-zsh    # プラグイン
 npm ci && npm run typecheck              # テストの型チェック（JSDoc、tsc --checkJs）
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
+printf '%s' '{"tool_input":{"command":"print -l ${(s/:/)PATH}"}}' | sh plugins/safe-zsh/hooks/pre-tool-use.sh  # 拒否の JSON を出力
 bash .github/ci/engine-env.sh             # ログインなしで本物の Claude Code でフックを確認
 cd site && npm ci && npm run build       # サイトのビルドと検査（site/dist）
 cd site && npm run dev                    # ローカルでプレビュー
@@ -160,6 +189,12 @@ cd site && npm run og                     # 言語ごとのリンクプレビュ
 cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: [[ -o shwordsplit ]] && echo ON || echo OFF' | ZDOTDIR="$PWD" claude -p --model haiku --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config --allowedTools=Bash
 ```
 
+PreToolUse フックは、ログインした環境で `auto` モードで確認します。モデルが safe-zsh の拒否理由を受け取り、`echo "$PATH" | tr ':' '\n'` のように POSIX の書き方に直して再実行するはずです。`--plugin-dir` を外すと `dangerous rm operations` のメッセージで拒否されるはずです。
+
+```sh
+cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: print -l ${(s/:/)PATH} | wc -l' | claude -p --model haiku --permission-mode auto --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config
+```
+
 新しいバージョンは、`plugins/safe-zsh/.claude-plugin/plugin.json` の `version` を上げる PR をマージしてから、同じバージョンで `vX.Y.Z` の Release を作ります。タグができると、CI がタグと `version` が一致しているか確認します。
 
 ## 制限
@@ -167,6 +202,9 @@ cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this comman
 - Claude Code 専用です。Codex など他のエージェントには `CLAUDE_ENV_FILE` がありません。
 - Claude Code のバイナリには、`scrubCredentialEnv` のとき env スクリプトを飛ばす分岐があります。どのモードで有効になるかは確認できていません。
 - `CLAUDE_ENV_FILE` の動作が変わると、プラグインが気づかないうちに効かなくなる可能性があります。CI が毎日最新の Claude Code でフックが書いた内容を確認しています。
+- PreToolUse フックは `${(` だけを見ます。`$${` や入れ子の subshell のように安全チェックが解析できない他の書き方は捕まえないので、従来の `rm` メッセージで拒否され続けます。
+- シングルクォートは解析せずに取り除きます。そのため、ダブルクォートの中のアポストロフィがその後の `${(` を隠すことがあり（このときは組み込みのチェックがそのまま拒否します）、quoted heredoc の本文の `${(...)}` もコードとみなして拒否します。
+- PreToolUse フックは macOS の `claude -p --permission-mode auto` でしか確認していません。bypass・既定のモード、対話型のアプリ、Linux では試していません。
 
 ## License
 

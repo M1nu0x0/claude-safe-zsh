@@ -1,6 +1,6 @@
 {
   "name": "claude-safe-zsh",
   "owner": { "name": "M1nu0x0", "url": "https://github.com/M1nu0x0" },
-  "description": "A Claude Code plugin that makes the Bash tool's zsh read bash-style globs, word splitting and = words the way bash does",
+  "description": "A Claude Code plugin that makes the Bash tool's zsh read bash-style globs, word splitting and = words the way bash does, and explains the safety check's refusal of zsh ${(flags)...} expansions",
   "plugins": [{ "name": "safe-zsh", "source": "./plugins/safe-zsh" }]
 }

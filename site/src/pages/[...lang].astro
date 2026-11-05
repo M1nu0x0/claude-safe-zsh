@@ -30,7 +30,7 @@ README.md  src
 const hookLine = 'if [ -n "${ZSH_VERSION:-}" ]; then setopt no_nomatch sh_word_split no_equals; fi'
 
 // Related anthropics/claude-code issues, each with a live state badge and a line in strings (i<number>).
-const issues = [103027, 67146, 103576, 74888, 101554, 74746, 7490, 91498, 52521, 2444, 24573]
+const issues = [103027, 67146, 103576, 74888, 101554, 74746, 7490, 91498, 52521, 2444, 24573, 104925, 99249, 100419, 99899]
 const issueUrl = (n: number) => `https://github.com/anthropics/claude-code/issues/${n}`
 const badge = (n: number) => `https://img.shields.io/github/issues/detail/state/anthropics/claude-code/${n}?label=`
 ---
@@ -58,6 +58,7 @@ const badge = (n: number) => `https://img.shields.io/github/issues/detail/state/
     <p set:html={t.why1} />
     <p set:html={t.why2} />
     <p set:html={t.why3} />
+    <p set:html={t.why4} />
   </section>
 
   <section aria-labelledby="how">
@@ -66,6 +67,7 @@ const badge = (n: number) => `https://img.shields.io/github/issues/detail/state/
     <Cmd lang={lang} code={hookLine} />
     <p set:html={t.how2} />
     <p set:html={t.how3} />
+    <p set:html={t.how4} />
   </section>
 
   <section aria-labelledby="fixes">
@@ -74,6 +76,7 @@ const badge = (n: number) => `https://img.shields.io/github/issues/detail/state/
       <dt><code>no_nomatch</code></dt><dd set:html={t.fixNomatch} />
       <dt><code>sh_word_split</code></dt><dd set:html={t.fixSplit} />
       <dt><code>no_equals</code></dt><dd set:html={t.fixEquals} />
+      <dt><code>{'${(flags)...}'}</code></dt><dd set:html={t.fixFlags} />
     </dl>
     <p class="not-fixed" set:html={t.notFixed} />
   </section>

@@ -11,6 +11,8 @@ Claude Code의 Bash 도구 셸이 zsh일 때, Claude가 bash 문법으로 쓴 �
 
 macOS에서는 로그인 셸이 zsh라서 Bash 도구도 zsh로 명령을 실행합니다. 그런데 Claude는 bash 문법으로 명령을 쓰기 때문에, 매치 없는 glob, 따옴표 없는 변수, `=`로 시작하는 단어에서 명령이 멈추거나 조용히 다르게 동작합니다. 이 플러그인은 세션이 시작될 때 Bash 도구의 zsh에 `no_nomatch`, `sh_word_split`, `no_equals` 세 옵션을 켭니다.
 
+또 Claude Code의 안전 검사는 `${(s/:/)PATH}` 같은 zsh `${(flags)...}` 확장을 파싱하지 못해, `rm`이 없는 명령도 `rm` 위험이 있다며 거부합니다. 이 플러그인의 PreToolUse 훅이 그보다 먼저 이런 명령을 거부하고, 모델에게 진짜 이유와 POSIX 형식으로 고쳐 쓰는 방법을 알려 줍니다.
+
 **[Website](https://m1nu0x0.github.io/claude-safe-zsh/ko/) · [Releases](https://github.com/M1nu0x0/claude-safe-zsh/releases) · [Changelog](CHANGELOG.md)**
 
 | Claude가 쓴 명령 | zsh 기본값 | 이 플러그인 |
@@ -18,6 +20,7 @@ macOS에서는 로그인 셸이 zsh라서 Bash 도구도 zsh로 명령을 실행
 | `grep -rn TODO src --include=*.ts` | `(eval):1: no matches found: --include=*.ts`, grep이 실행되지 않음 | grep이 `*.ts` 패턴을 받아 실행 |
 | `echo =====; ls` | `(eval):1: ==== not found`, 뒤 명령도 멈춤 | `=====`을 찍고 `ls`까지 실행 |
 | `T="a.py b.py"; pytest $T` | `$T`가 한 단어로 넘어가 `a.py b.py`라는 파일 하나를 찾음 | `a.py`, `b.py` 두 인자로 나뉨 |
+| `print -l ${(s/:/)PATH} \| rg -c /` | 실행 전에 `could not be checked for dangerous rm operations`로 거부됨(명령에 `rm`은 없음) | 훅이 이유를 알려 거부하고, 모델이 `echo "$PATH" \| tr ':' '\n' \| rg -c /`로 고쳐 실행 |
 
 ## 만든 이유
 
@@ -26,6 +29,8 @@ macOS에서는 로그인 셸이 zsh라서 Bash 도구도 zsh로 명령을 실행
 이 이슈의 작성자는 2026년 7월 28일부터 10월 17일까지 자신의 transcript를 세어, Bash 도구 호출 61,040번 중 2,570번에서 zsh 오류가 났다고 보고했습니다. 9월 하순 이후로는 1,000번당 51번꼴로 늘었고, 그중 76%는 명령이 0으로 끝나서 오류가 출력 중간에 묻혔습니다. Claude가 zsh 탓이라고 알아챈 경우는 약 3%뿐이었습니다. 가장 많은 세 가지가 매치 없는 glob(`--include=*.ts`, `ls libs/*/README.md`)과 `=` 단어(`echo ====`)였고, 따옴표 없는 변수는 대부분 조용히 실패해서 셀 수 있었던 것보다 많을 것이라고 했습니다.
 
 같은 문제는 앞서 [#67146](https://github.com/anthropics/claude-code/issues/67146)으로도 보고됐지만 활동이 없어 닫혔습니다. #103027이 Claude Code 안에서 고쳐지면 이 플러그인은 필요 없어지므로, 그때 레포를 보관(archive)할 예정입니다. CI가 매일 #103027의 상태를 확인합니다.
+
+zsh 문법은 셸에 닿기 전에도 걸립니다. macOS `auto` 모드에서 `print -l ${(s/:/)PATH} | rg -c /`는 실행되지 않고 `This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed.`로 거부됩니다([#104925](https://github.com/anthropics/claude-code/issues/104925)). 명령이 실행되기 전이라 zsh 오류가 아니고, `setopt`나 `.zshenv`는 zsh가 시작돼야 적용되므로 이 거부를 막지 못합니다. 같은 확장도 `echo '${(s/:/)PATH}'`처럼 작은따옴표 안에 있으면 실행됩니다. 외부 사용자의 분석(공식 확인은 아님)에 따르면 안전 검사는 `tree-sitter-bash`로 파싱하는데 이 문법에 `${(flags)...}`가 없어 `ERROR` 노드가 되고, 그러면 `rm` 위험을 배제할 수 없다고 판단합니다. 근본 수정은 Claude Code가 세션 셸에 맞는 문법으로 파싱하거나, `rm`·`rmdir`이 없는 명령의 파싱 실패를 `rm` 위험으로 표시하지 않는 것입니다. 그렇게 고쳐지면 PreToolUse 훅은 뺄 예정입니다.
 
 ## 설치
 
@@ -47,6 +52,8 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 
 ## 동작
 
+### 세션 시작(SessionStart)
+
 1. 세션이 시작될 때(`SessionStart`: startup, resume, clear, compact) 훅이 `$CLAUDE_ENV_FILE`에 아래 한 줄을 씁니다.
 
    ```sh
@@ -58,6 +65,15 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 4. 셸이 zsh(`CLAUDE_CODE_SHELL`이 있으면 그 값, 없으면 `$SHELL`)이면 훅이 stdout으로 한 줄을 더 냅니다. SessionStart 훅의 stdout은 모델에게 전달됩니다. Bash 도구 안에서 직접 띄운 `zsh -c`는 위 옵션을 물려받지 않으니 스크립트 맨 앞에 `setopt no_nomatch sh_word_split no_equals;`를 붙이거나, bash 문법이면 `bash -c`를 쓰라는 안내입니다. 모델이 따르지 않을 수 있고, 도구나 스크립트가 띄우는 자식 zsh에는 닿지 않습니다.
 
 `CLAUDE_ENV_FILE`이 없으면 훅은 아무것도 쓰지 않고 0으로 끝납니다. resume이나 compact 때 같은 줄이 다시 쓰여도 `setopt`가 반복될 뿐입니다.
+
+### zsh `${(flags)...}` 명령 거부(PreToolUse)
+
+1. Bash 도구 명령마다 PreToolUse 훅이 Claude Code의 안전 검사보다 먼저 명령을 읽습니다. 작은따옴표 안은 글자 그대로이므로 빼고, 남은 부분에 `${(`가 있으면 거부합니다.
+2. 거부 사유는 모델에게 전달됩니다. 안전 검사가 이 확장을 파싱하지 못해 명령이 실행되지도 않은 채 `rm` 위험으로 거부될 것이라는 설명, POSIX sh로 고쳐 쓰는 방법(`echo "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`), `zsh -c`·`eval`·스크립트로 감싸 검사를 피하지 말라는 것, heredoc 안의 글자라면 Write 도구로 파일을 쓰라는 것입니다.
+3. 훅은 거부만 하고 승인은 하지 않습니다. `${(`가 없으면 아무것도 출력하지 않으므로, Claude Code는 플러그인이 없을 때와 똑같이 판단합니다.
+4. `zsh -c`로 감싸는 자동 변환은 넣지 않았습니다. 안전 검사를 피하게 만들 수 있기 때문입니다.
+
+Claude Code `2.1.318`, macOS의 `claude -p --permission-mode auto`에서 PreToolUse만 호출되고 PermissionRequest와 PermissionDenied는 호출되지 않았습니다. 거부 뒤 모델이 `echo "$PATH" | tr ':' '\n' | rg -c /`로 고쳐 다시 실행해 결과를 얻었습니다.
 
 ## 막는 것과 못 막는 것
 
@@ -71,6 +87,8 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 | `path`가 `PATH`와 묶인 배열 | `for path in ...` 뒤 `jq`를 못 찾음 | 세 옵션 밖 | 못 막음 |
 | `status`가 읽기 전용 변수 | `status=$(...)` → `read-only variable: status` | 세 옵션 밖 | 못 막음 |
 | bash에만 있는 문법 | `${!v}`, `declare -A`, `compgen` | 없음 | 못 막음 |
+| 안전 검사가 zsh `${(flags)...}`를 파싱하지 못해 `rm` 위험으로 거부 | `print -l ${(s/:/)PATH}` → `could not be checked for dangerous rm operations` | 무관(실행 전) | 이유를 알려 거부, 모델이 POSIX로 고쳐 씀 |
+| 안전 검사가 파싱하지 못하는 다른 구문 | `$${`, 중첩 subshell | 무관(실행 전) | 못 막음(기존 `rm` 메시지로 거부) |
 
 `emulate sh`를 쓰지 않고 세 옵션만 켜는 이유는, 바뀌는 옵션이 많아 Bash 도구가 snapshot으로 불러오는 사용자 zsh 함수의 동작까지 바꿀 수 있어서입니다.
 
@@ -104,6 +122,15 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 | [anthropics/claude-code#2444](https://github.com/anthropics/claude-code/issues/2444) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/2444?label=) | Bash 도구가 bash가 아니라 기본 셸에서 실행된다는 보고 |
 | [anthropics/claude-code#24573](https://github.com/anthropics/claude-code/issues/24573) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/24573?label=) | 사용자 셸이 bash여도 Bash 도구가 zsh로 잡히는 문제 |
 
+**안전 검사의 파싱**
+
+| 이슈 | 상태 | 내용 |
+| --- | --- | --- |
+| [anthropics/claude-code#104925](https://github.com/anthropics/claude-code/issues/104925) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/104925?label=) | `rm`이 없는 명령도 파싱에 실패하면 `dangerous rm operations`로 거부됨. 코멘트에 macOS zsh `${(@f)...}` 사례가 있음. PreToolUse 훅이 생긴 이유이자 제거 조건 |
+| [anthropics/claude-code#99249](https://github.com/anthropics/claude-code/issues/99249) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/99249?label=) | `zsh -c` 스크립트도 bash 문법으로 판단되는 것으로 보임 |
+| [anthropics/claude-code#100419](https://github.com/anthropics/claude-code/issues/100419) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/100419?label=) | PermissionRequest 훅 입력에 거부 사유가 없어 원인을 구분할 수 없음. 이 플러그인이 PreToolUse에서 막는 이유 |
+| [anthropics/claude-code#99899](https://github.com/anthropics/claude-code/issues/99899) | ![](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/99899?label=) | 서브에이전트에서는 이 승인 창의 자동 거부 시간이 없어 무기한 멈춤 |
+
 새 관련 이슈를 찾으면 issue나 PR로 알려주세요.
 
 ## 다른 방법
@@ -125,8 +152,9 @@ plugins/safe-zsh/
   .claude-plugin/
     plugin.json         플러그인 매니페스트
   hooks/
-    hooks.json          SessionStart 훅 하나
+    hooks.json          SessionStart 훅과 PreToolUse 훅(Bash)
     session-start.sh    CLAUDE_ENV_FILE에 setopt 한 줄 추가, 모델에게 자식 zsh 안내 한 줄 출력
+    pre-tool-use.sh     zsh ${(flags)...} 명령을 이유와 함께 거부(승인은 하지 않음)
   tests/                node --test 용 테스트
 .github/ci/
   engine-env.sh         실제 Claude Code로 훅이 쓴 내용을 확인
@@ -144,6 +172,7 @@ claude plugin validate .                  # 마켓플레이스
 claude plugin validate plugins/safe-zsh    # 플러그인
 npm ci && npm run typecheck              # 테스트 타입 검사(JSDoc, tsc --checkJs)
 node --test 'plugins/safe-zsh/tests/*.test.mjs'
+printf '%s' '{"tool_input":{"command":"print -l ${(s/:/)PATH}"}}' | sh plugins/safe-zsh/hooks/pre-tool-use.sh  # 거부 JSON 출력
 bash .github/ci/engine-env.sh             # 로그인 없이 실제 Claude Code로 훅 확인
 cd site && npm ci && npm run build       # 사이트 빌드와 검사(site/dist)
 cd site && npm run dev                    # 로컬 미리보기
@@ -160,6 +189,12 @@ cd site && npm run og                     # 언어별 링크 미리보기 이미
 cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: [[ -o shwordsplit ]] && echo ON || echo OFF' | ZDOTDIR="$PWD" claude -p --model haiku --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config --allowedTools=Bash
 ```
 
+PreToolUse 훅은 로그인된 환경에서 `auto` 모드로 확인합니다. 모델이 safe-zsh의 거부 사유를 받은 뒤 `echo "$PATH" | tr ':' '\n'`처럼 POSIX 형식으로 고쳐 다시 실행해야 하고, `--plugin-dir`를 빼면 `dangerous rm operations` 메시지로 거부돼야 합니다.
+
+```sh
+cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: print -l ${(s/:/)PATH} | wc -l' | claude -p --model haiku --permission-mode auto --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config
+```
+
 새 버전은 `plugins/safe-zsh/.claude-plugin/plugin.json`의 `version`을 올리는 PR을 병합한 뒤, 같은 버전으로 `vX.Y.Z` Release를 만듭니다. 태그가 생기면 CI가 태그와 `version`이 같은지 확인합니다.
 
 ## 한계
@@ -167,6 +202,9 @@ cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this comman
 - Claude Code 전용입니다. Codex 등 다른 에이전트에는 `CLAUDE_ENV_FILE`이 없습니다.
 - Claude Code 바이너리에는 `scrubCredentialEnv`일 때 env 스크립트를 건너뛰는 분기가 있습니다. 어떤 모드에서 켜지는지는 확인하지 못했습니다.
 - `CLAUDE_ENV_FILE`의 동작이 바뀌면 플러그인이 조용히 효과를 잃을 수 있습니다. CI가 매일 최신 Claude Code로 훅이 쓴 내용을 확인합니다.
+- PreToolUse 훅은 `${(`만 봅니다. `$${`, 중첩 subshell처럼 안전 검사가 파싱하지 못하는 다른 구문은 잡지 않으므로 기존 `rm` 메시지로 계속 거부됩니다.
+- 작은따옴표는 파싱하지 않고 지웁니다. 그래서 큰따옴표 안의 아포스트로피가 그 뒤의 `${(`를 가릴 수 있고(이때는 기본 검사가 그대로 거부합니다), quoted heredoc 본문의 `${(...)}`도 코드로 보고 거부합니다.
+- PreToolUse 훅은 macOS의 `claude -p --permission-mode auto`에서만 확인했습니다. bypass·기본 모드, 대화형 앱, Linux에서는 시험하지 않았습니다.
 
 ## License
 
