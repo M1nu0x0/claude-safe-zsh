@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: ["main"]
   # Daily against the latest Claude Code, which can change how CLAUDE_ENV_FILE works between releases,
-  # and to see whether the upstream issue has been fixed.
+  # and to see whether the upstream issues (#103027, #104925) have been fixed.
   schedule:
     - cron: "17 18 * * *" # 03:17 KST
   workflow_dispatch:
@@ -82,13 +82,19 @@ jobs:
     permissions:
       issues: read
     steps:
-      - name: Check anthropics/claude-code#103027
+      - name: Check anthropics/claude-code#103027 and #104925
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          state=$(gh api repos/anthropics/claude-code/issues/103027 --jq '.state + " " + (.state_reason // "")')
-          echo "::notice title=anthropics/claude-code#103027::$state"
-          case "$state" in
-            "closed completed")
-              echo "::warning title=upstream fixed::anthropics/claude-code#103027 is closed as completed. Check whether Claude Code now handles zsh, and if so retire this plugin." ;;
-          esac
+          # 103027: Claude writes bash under zsh, the reason for the plugin. 104925: the safety check cannot parse zsh
+          # ${(flags)...}, the reason for the PreToolUse hook and its hint.
+          for n in 103027 104925; do
+            state=$(gh api "repos/anthropics/claude-code/issues/$n" --jq '.state + " " + (.state_reason // "")')
+            echo "::notice title=anthropics/claude-code#$n::$state"
+            case "$n $state" in
+              "103027 closed completed")
+                echo "::warning title=upstream fixed::anthropics/claude-code#103027 is closed as completed. Check whether Claude Code now handles zsh, and if so retire this plugin." ;;
+              "104925 closed completed")
+                echo "::warning title=upstream fixed::anthropics/claude-code#104925 is closed as completed. Check whether the safety check now parses zsh \${(flags)...}, and if so remove the PreToolUse hook and its SessionStart hint." ;;
+            esac
+          done

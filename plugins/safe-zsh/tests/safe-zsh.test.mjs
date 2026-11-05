@@ -115,13 +115,21 @@ test('an unquoted variable is split into words, as bash does', () => {
   })
 })
 
-test('under zsh, the hook prints one line telling the model how to start a child zsh', () => {
+test('under zsh, the hook prints two lines for the model: how to start a child zsh, and no ${(flags)...}', () => {
   const out = hint({ SHELL: '/bin/zsh', CLAUDE_CODE_SHELL: '' })
-  assert.equal(out.split('\n').filter(Boolean).length, 1)
-  assert.match(out, /zsh -c/)
+  const [child, flags, ...rest] = out.split('\n').filter(Boolean)
+  assert.deepEqual(rest, [])
+  assert.match(child, /zsh -c/)
   // The hint and the line the hook writes must name the same options.
   assert.ok(LINE.includes(OPTS))
-  assert.ok(out.includes(`"${OPTS};"`))
+  assert.ok(child.includes(`"${OPTS};"`))
+  // The ${(flags)...} line names the refusal and the same POSIX rewrite the PreToolUse deny gives.
+  assert.match(flags, /\$\{\(flags\)\.\.\.\}/)
+  assert.match(flags, /dangerous rm/)
+  assert.ok(flags.includes(`printf '%s\\n' "$PATH" | tr ':' '\\n'`))
+  assert.ok(flags.includes('while IFS= read -r line; do ...; done < file'))
+  const deny = readFileSync(join(import.meta.dirname, '..', 'hooks', 'pre-tool-use.sh'), 'utf8')
+  assert.ok(deny.includes(`printf '%s\\\\n' \\"$PATH\\" | tr ':' '\\\\n'`))
 })
 
 test('under bash the hook prints nothing, and CLAUDE_CODE_SHELL decides over SHELL', () => {
