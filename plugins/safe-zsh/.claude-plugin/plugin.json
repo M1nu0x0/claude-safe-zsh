@@ -1,6 +1,6 @@
 {
   "name": "safe-zsh",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Reads the Bash tool's zsh like bash for globs, word splitting and = words: a SessionStart hook writes one setopt line to CLAUDE_ENV_FILE, and a PreToolUse hook turns away zsh ${(flags)...} expansions, which the safety check would refuse as a possible rm, with a POSIX rewrite",
   "author": {
     "name": "M1nu0x0",
