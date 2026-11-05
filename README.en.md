@@ -4,6 +4,7 @@
 [![CI](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml/badge.svg)](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](LICENSE)
 [![anthropics/claude-code#103027](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=anthropics%2Fclaude-code%23103027)](https://github.com/anthropics/claude-code/issues/103027)
+[![anthropics/claude-code#104925](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/104925?label=anthropics%2Fclaude-code%23104925)](https://github.com/anthropics/claude-code/issues/104925)
 
 [한국어](README.md) | **English** | [日本語](README.ja.md)
 
@@ -30,7 +31,7 @@ Its author counted their own transcripts from July 28 to October 17, 2026 and fo
 
 The same problem was reported earlier as [#67146](https://github.com/anthropics/claude-code/issues/67146), which was closed for inactivity. Once #103027 is fixed in Claude Code, this plugin is no longer needed, and the repository will be archived. CI checks the state of #103027 every day.
 
-zsh syntax can also fail before any shell starts. In macOS `auto` mode, `print -l ${(s/:/)PATH} | rg -c /` does not run; it is refused with `This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed.` ([#104925](https://github.com/anthropics/claude-code/issues/104925)). The command never ran, so this is not a zsh error, and `setopt` or `.zshenv` cannot prevent it, since they only apply once zsh has started. The same expansion runs inside single quotes, as in `echo '${(s/:/)PATH}'`. An outside user's analysis (not confirmed by Anthropic) is that the check parses with `tree-sitter-bash`, whose grammar has no `${(flags)...}`, so the command becomes an `ERROR` node and the check cannot rule out an `rm`. The real fix is for Claude Code to parse with the session shell's grammar, or not to flag a parse failure as an `rm` risk when the command has no `rm` or `rmdir`. Once that is fixed, the PreToolUse hook will be removed.
+zsh syntax can also fail before any shell starts. In macOS `auto` mode, `print -l ${(s/:/)PATH} | rg -c /` does not run; it is refused with `This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed.` ([#104925](https://github.com/anthropics/claude-code/issues/104925)). The command never ran, so this is not a zsh error, and `setopt` or `.zshenv` cannot prevent it, since they only apply once zsh has started. The same expansion runs inside single quotes, as in `echo '${(s/:/)PATH}'`. An outside user's analysis (not confirmed by Anthropic) is that the check parses with `tree-sitter-bash`, whose grammar has no `${(flags)...}`, so the command becomes an `ERROR` node and the check cannot rule out an `rm`. The real fix is for Claude Code to parse with the session shell's grammar, or not to flag a parse failure as an `rm` risk when the command has no `rm` or `rmdir`. Once that is fixed, the PreToolUse hook and the session-start hint below will be removed. CI checks the state of #104925 every day as well.
 
 ## Install
 
@@ -62,13 +63,17 @@ It applies from the next session after you install it.
 
 2. Claude Code prepends the contents of `CLAUDE_ENV_FILE` to every Bash tool command and runs them in the same shell, so `setopt` applies as well as `export`.
 3. Under bash the condition is false, so the line does nothing and exits 0. That is why it is `if ... fi` rather than `[ ... ] && setopt`.
-4. If the shell is zsh (`CLAUDE_CODE_SHELL` if set, otherwise `$SHELL`), the hook also prints one line to stdout, which a SessionStart hook sends to the model. It says that a `zsh -c` the model starts inside a command does not inherit these options, so its script should begin with `setopt no_nomatch sh_word_split no_equals;`, or use `bash -c` for bash syntax. The model may ignore it, and it does not reach a child zsh that a tool or script starts.
+4. If the shell is zsh (`CLAUDE_CODE_SHELL` if set, otherwise `$SHELL`), the hook also prints two lines to stdout, which a SessionStart hook sends to the model.
+   - A `zsh -c` the model starts inside a command does not inherit these options, so its script should begin with `setopt no_nomatch sh_word_split no_equals;`, or use `bash -c` for bash syntax. This does not reach a child zsh that a tool or script starts.
+   - zsh `${(flags)...}` expansions such as `${(s/:/)PATH}` or `${(@f)...}` cannot be parsed by the safety check, are refused as a possible dangerous `rm` before they run, and `setopt` cannot help, so write POSIX sh instead, such as `echo "$PATH" | tr ':' '\n'` or `while IFS= read -r line; do ...; done < file` ([#104925](https://github.com/anthropics/claude-code/issues/104925)). If the model writes one anyway, the PreToolUse hook below denies it.
+
+   The model may ignore either hint.
 
 Without `CLAUDE_ENV_FILE` the hook writes nothing and exits 0. If the line is written again on resume or compact, `setopt` simply runs twice.
 
 ### Denying zsh `${(flags)...}` commands (PreToolUse)
 
-1. For every Bash tool command, a PreToolUse hook reads the command before Claude Code's safety check does. It drops anything inside single quotes, which is literal text, and denies the command if what is left contains `${(`.
+1. In case the model writes `${(flags)...}` despite the session-start hint, for every Bash tool command a PreToolUse hook reads the command before Claude Code's safety check does. It drops anything inside single quotes, which is literal text, and denies the command if what is left contains `${(`.
 2. The reason goes to the model. It says that the safety check cannot parse the expansion and would refuse the command as a possible dangerous `rm` although it has not run, how to write it in POSIX sh (`echo "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`), not to wrap it in `zsh -c`, `eval` or a script to get past the check, and to write the file with the Write tool if it is literal text in a heredoc.
 3. The hook only ever denies; it never approves. Without `${(` it prints nothing, so Claude Code decides exactly as it would without the plugin.
 4. It does not rewrite commands into `zsh -c`, because that could get them past the safety check.
@@ -153,7 +158,7 @@ plugins/safe-zsh/
     plugin.json         plugin manifest
   hooks/
     hooks.json          a SessionStart hook and a PreToolUse hook (Bash)
-    session-start.sh    appends one setopt line to CLAUDE_ENV_FILE and prints one child-zsh hint for the model
+    session-start.sh    appends one setopt line to CLAUDE_ENV_FILE and prints the child-zsh and ${(flags)...} hints for the model
     pre-tool-use.sh     denies zsh ${(flags)...} commands with the reason (never approves)
   tests/                tests for node --test
 .github/ci/

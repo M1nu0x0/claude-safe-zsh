@@ -7,6 +7,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 ### Added
 
 - A PreToolUse hook for the Bash tool that denies a command using a zsh `${(flags)...}` expansion, such as `print -l ${(s/:/)PATH}`, before Claude Code's safety check refuses it with `This command could not be checked for dangerous rm operations` although it has no `rm` ([anthropics/claude-code#104925](https://github.com/anthropics/claude-code/issues/104925)); `setopt` cannot help there, because the command is refused before any shell starts. The reason it gives the model says what is really wrong and how to write the command in POSIX sh. It only ever denies, never approves, ignores text inside single quotes, and does not rewrite commands into `zsh -c`, which could get them past the check
+- When the shell is zsh, the SessionStart hook prints a second line for the model: zsh `${(flags)...}` expansions are refused by the safety check before they run and `setopt` cannot help, so it should write POSIX sh such as `echo "$PATH" | tr ':' '\n'` instead; the PreToolUse hook catches what it writes anyway
+- The daily CI run also reports the state of anthropics/claude-code#104925 and warns when it is closed as completed, and the READMEs carry its badge at the top
 - Tests for that hook: the forms it denies, single quotes and escaped double quotes, fields other than the command, pretty-printed input, that it can only deny, and that `hooks.json` runs it for Bash
 - The READMEs and the site explain the hook, its limits and four related upstream issues (#104925, #99249, #100419, #99899), and the site answers why a command without `rm` is refused as a dangerous `rm`
 

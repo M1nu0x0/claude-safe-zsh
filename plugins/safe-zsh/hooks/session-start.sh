@@ -8,6 +8,11 @@ if [ -n "${ZSH_VERSION:-}" ]; then setopt no_nomatch sh_word_split no_equals; fi
 EOF
 # That line reaches only the Bash tool's own shell, so tell the model about the zsh it starts inside a command; stdout of
 # a SessionStart hook goes to the model. shortcut: the model may ignore it, a ZDOTDIR .zshenv would hold for every child zsh.
+# Knowing the shell is zsh, the model also reaches for zsh ${(flags)...}, which the safety check refuses before any shell
+# runs (anthropics/claude-code#104925); say so up front, and pre-tool-use.sh catches what still gets through.
 case "${CLAUDE_CODE_SHELL:-${SHELL:-}}" in
-  *zsh) echo 'The Bash tool runs zsh with setopt no_nomatch sh_word_split no_equals applied. A zsh you start inside a command (zsh -c, zsh -ic, a #!/bin/zsh script) does not inherit it: begin its script with "setopt no_nomatch sh_word_split no_equals;", or use bash -c for bash syntax.' ;;
+  *zsh) cat <<'EOF' ;;
+The Bash tool runs zsh with setopt no_nomatch sh_word_split no_equals applied. A zsh you start inside a command (zsh -c, zsh -ic, a #!/bin/zsh script) does not inherit it: begin its script with "setopt no_nomatch sh_word_split no_equals;", or use bash -c for bash syntax.
+Do not use zsh ${(flags)...} expansions such as ${(s/:/)PATH} or ${(@f)...} in Bash tool commands: Claude Code's safety check cannot parse them and refuses the command as a possible dangerous rm before it runs, and setopt cannot help. Write POSIX sh instead: echo "$PATH" | tr ':' '\n' to split a variable, while IFS= read -r line; do ...; done < file to read lines.
+EOF
 esac

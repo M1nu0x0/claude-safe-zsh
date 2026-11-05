@@ -4,6 +4,7 @@
 [![CI](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml/badge.svg)](https://github.com/M1nu0x0/claude-safe-zsh/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/M1nu0x0/claude-safe-zsh)](LICENSE)
 [![anthropics/claude-code#103027](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/103027?label=anthropics%2Fclaude-code%23103027)](https://github.com/anthropics/claude-code/issues/103027)
+[![anthropics/claude-code#104925](https://img.shields.io/github/issues/detail/state/anthropics/claude-code/104925?label=anthropics%2Fclaude-code%23104925)](https://github.com/anthropics/claude-code/issues/104925)
 
 [한국어](README.md) | [English](README.en.md) | **日本語**
 
@@ -30,7 +31,7 @@ macOS ではログインシェルが zsh なので、Bash ツールも zsh で�
 
 同じ問題は以前 [#67146](https://github.com/anthropics/claude-code/issues/67146) でも報告されましたが、活動がなく閉じられました。#103027 が Claude Code で修正されればこのプラグインは不要になるので、そのときリポジトリをアーカイブする予定です。CI が毎日 #103027 の状態を確認しています。
 
-zsh の書き方は、シェルが起動する前にも引っかかります。macOS の `auto` モードでは `print -l ${(s/:/)PATH} | rg -c /` が実行されず、`This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed.` で拒否されます（[#104925](https://github.com/anthropics/claude-code/issues/104925)）。コマンドは実行されていないので zsh のエラーではなく、`setopt` や `.zshenv` は zsh が起動してから適用されるので、この拒否を防げません。同じ展開でも `echo '${(s/:/)PATH}'` のようにシングルクォートの中なら実行されます。外部ユーザーの分析（公式な確認ではない）によると、安全チェックは `tree-sitter-bash` で解析しており、この文法に `${(flags)...}` がないため `ERROR` ノードになり、`rm` の危険を否定できないと判断します。根本的な修正は、Claude Code がセッションのシェルに合った文法で解析するか、`rm`・`rmdir` のないコマンドの解析失敗を `rm` の危険として扱わないことです。そう修正されれば PreToolUse フックは外す予定です。
+zsh の書き方は、シェルが起動する前にも引っかかります。macOS の `auto` モードでは `print -l ${(s/:/)PATH} | rg -c /` が実行されず、`This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed.` で拒否されます（[#104925](https://github.com/anthropics/claude-code/issues/104925)）。コマンドは実行されていないので zsh のエラーではなく、`setopt` や `.zshenv` は zsh が起動してから適用されるので、この拒否を防げません。同じ展開でも `echo '${(s/:/)PATH}'` のようにシングルクォートの中なら実行されます。外部ユーザーの分析（公式な確認ではない）によると、安全チェックは `tree-sitter-bash` で解析しており、この文法に `${(flags)...}` がないため `ERROR` ノードになり、`rm` の危険を否定できないと判断します。根本的な修正は、Claude Code がセッションのシェルに合った文法で解析するか、`rm`・`rmdir` のないコマンドの解析失敗を `rm` の危険として扱わないことです。そう修正されれば PreToolUse フックと下のセッション開始時の案内は外す予定です。CI が毎日 #104925 の状態も確認しています。
 
 ## インストール
 
@@ -62,13 +63,17 @@ Claude Desktop では、プロンプト横の `+` → Plugins → Add marketplac
 
 2. Claude Code は `CLAUDE_ENV_FILE` の内容を Bash ツールのコマンドごとに先頭に付け、同じシェルで実行します。そのため `export` だけでなく `setopt` も適用されます。
 3. シェルが bash なら条件が偽になり、何もせずに 0 で終わります。`[ ... ] && setopt` ではなく `if ... fi` で書いているのはこのためです。
-4. シェルが zsh（`CLAUDE_CODE_SHELL` があればその値、なければ `$SHELL`）のとき、フックは stdout にもう 1 行出力します。SessionStart フックの stdout はモデルに渡されます。コマンドの中でモデルが起動する `zsh -c` は上のオプションを引き継がないので、スクリプトの先頭に `setopt no_nomatch sh_word_split no_equals;` を付けるか、bash 構文なら `bash -c` を使うようにという案内です。モデルが従わないことがあり、ツールやスクリプトが起動する子 zsh には届きません。
+4. シェルが zsh（`CLAUDE_CODE_SHELL` があればその値、なければ `$SHELL`）のとき、フックは stdout にもう 2 行出力します。SessionStart フックの stdout はモデルに渡されます。
+   - コマンドの中でモデルが起動する `zsh -c` は上のオプションを引き継がないので、スクリプトの先頭に `setopt no_nomatch sh_word_split no_equals;` を付けるか、bash 構文なら `bash -c` を使うようにという案内。ツールやスクリプトが起動する子 zsh には届きません。
+   - `${(s/:/)PATH}` や `${(@f)...}` のような zsh の `${(flags)...}` 展開は安全チェックが解析できず、実行前に `rm` の危険として拒否され、`setopt` でも防げないので、`echo "$PATH" | tr ':' '\n'` や `while IFS= read -r line; do ...; done < file` のように POSIX sh で書くようにという案内（[#104925](https://github.com/anthropics/claude-code/issues/104925)）。それでもモデルが書いた場合は、下の PreToolUse フックが拒否します。
+
+   モデルがどちらの案内にも従わないことがあります。
 
 `CLAUDE_ENV_FILE` がなければ、フックは何も書かずに 0 で終わります。resume や compact のときに同じ行がもう一度書かれても、`setopt` が繰り返されるだけです。
 
 ### zsh の `${(flags)...}` コマンドの拒否（PreToolUse）
 
-1. Bash ツールのコマンドごとに、PreToolUse フックが Claude Code の安全チェックより先にコマンドを読みます。シングルクォートの中は文字どおりの文字列なので除き、残りに `${(` があれば拒否します。
+1. セッション開始時の案内があってもモデルが `${(flags)...}` を書いた場合に備えて、Bash ツールのコマンドごとに PreToolUse フックが Claude Code の安全チェックより先にコマンドを読みます。シングルクォートの中は文字どおりの文字列なので除き、残りに `${(` があれば拒否します。
 2. 拒否の理由はモデルに渡されます。安全チェックがこの展開を解析できず、コマンドが実行されないまま `rm` の危険として拒否されること、POSIX sh での書き方（`echo "$PATH" | tr ':' '\n'`、`while IFS= read -r line; do ...; done < file`）、チェックを避けるために `zsh -c`・`eval`・スクリプトで包まないこと、heredoc の中の文字列なら Write ツールでファイルを書くことを伝えます。
 3. フックは拒否するだけで、承認はしません。`${(` がなければ何も出力しないので、Claude Code はプラグインがないときとまったく同じように判断します。
 4. `zsh -c` で包む自動変換は入れていません。安全チェックを避けられるようにしてしまうおそれがあるからです。
@@ -153,7 +158,7 @@ plugins/safe-zsh/
     plugin.json         プラグインのマニフェスト
   hooks/
     hooks.json          SessionStart フックと PreToolUse フック（Bash）
-    session-start.sh    CLAUDE_ENV_FILE に setopt を 1 行追加し、モデルに子 zsh の案内を 1 行出力
+    session-start.sh    CLAUDE_ENV_FILE に setopt を 1 行追加し、モデルに子 zsh と ${(flags)...} の案内を 2 行出力
     pre-tool-use.sh     zsh の ${(flags)...} コマンドを理由とともに拒否（承認はしない）
   tests/                node --test 用のテスト
 .github/ci/
