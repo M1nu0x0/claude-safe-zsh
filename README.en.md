@@ -21,7 +21,7 @@ Claude Code's safety check also cannot parse zsh `${(flags)...}` expansions such
 | `grep -rn TODO src --include=*.ts` | `(eval):1: no matches found: --include=*.ts`, grep never runs | grep gets the `*.ts` pattern and runs |
 | `echo =====; ls` | `(eval):1: ==== not found`, and the next command stops too | prints `=====` and runs `ls` |
 | `T="a.py b.py"; pytest $T` | `$T` is passed as one word, so pytest looks for a single file named `a.py b.py` | split into two arguments, `a.py` and `b.py` |
-| `print -l ${(s/:/)PATH} \| rg -c /` | refused before it runs with `could not be checked for dangerous rm operations`, although it has no `rm` | the hook denies it with the real reason, and the model rewrites it as `echo "$PATH" \| tr ':' '\n' \| rg -c /` |
+| `print -l ${(s/:/)PATH} \| rg -c /` | refused before it runs with `could not be checked for dangerous rm operations`, although it has no `rm` | the hook denies it with the real reason, and the model rewrites it in POSIX sh |
 
 ## Why
 
@@ -65,7 +65,7 @@ It applies from the next session after you install it.
 3. Under bash the condition is false, so the line does nothing and exits 0. That is why it is `if ... fi` rather than `[ ... ] && setopt`.
 4. If the shell is zsh (`CLAUDE_CODE_SHELL` if set, otherwise `$SHELL`), the hook also prints two lines to stdout, which a SessionStart hook sends to the model.
    - A `zsh -c` the model starts inside a command does not inherit these options, so its script should begin with `setopt no_nomatch sh_word_split no_equals;`, or use `bash -c` for bash syntax. This does not reach a child zsh that a tool or script starts.
-   - zsh `${(flags)...}` expansions such as `${(s/:/)PATH}` or `${(@f)...}` cannot be parsed by the safety check, are refused as a possible dangerous `rm` before they run, and `setopt` cannot help, so write POSIX sh instead, such as `echo "$PATH" | tr ':' '\n'` or `while IFS= read -r line; do ...; done < file` ([#104925](https://github.com/anthropics/claude-code/issues/104925)). If the model writes one anyway, the PreToolUse hook below denies it.
+   - zsh `${(flags)...}` expansions such as `${(s/:/)PATH}` or `${(@f)...}` cannot be parsed by the safety check, are refused as a possible dangerous `rm` before they run, and `setopt` cannot help, so write POSIX sh instead, such as `printf '%s\n' "$PATH" | tr ':' '\n'` or `while IFS= read -r line; do ...; done < file` ([#104925](https://github.com/anthropics/claude-code/issues/104925)). If the model writes one anyway, the PreToolUse hook below denies it.
 
    The model may ignore either hint.
 
@@ -74,7 +74,7 @@ Without `CLAUDE_ENV_FILE` the hook writes nothing and exits 0. If the line is wr
 ### Denying zsh `${(flags)...}` commands (PreToolUse)
 
 1. In case the model writes `${(flags)...}` despite the session-start hint, for every Bash tool command a PreToolUse hook reads the command before Claude Code's safety check does. It drops anything inside single quotes, which is literal text, and denies the command if what is left contains `${(`.
-2. The reason goes to the model. It says that the safety check cannot parse the expansion and would refuse the command as a possible dangerous `rm` although it has not run, how to write it in POSIX sh (`echo "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`), not to wrap it in `zsh -c`, `eval` or a script to get past the check, and to write the file with the Write tool if it is literal text in a heredoc.
+2. The reason goes to the model. It says that the safety check cannot parse the expansion and would refuse the command as a possible dangerous `rm` although it has not run, how to write it in POSIX sh (`printf '%s\n' "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`), not to wrap it in `zsh -c`, `eval` or a script to get past the check, and to write the file with the Write tool if it is literal text in a heredoc.
 3. The hook only ever denies; it never approves. Without `${(` it prints nothing, so Claude Code decides exactly as it would without the plugin.
 4. It does not rewrite commands into `zsh -c`, because that could get them past the safety check.
 
@@ -194,7 +194,7 @@ To check the Bash tool itself in a logged-in environment, set `ZDOTDIR` to an em
 cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: [[ -o shwordsplit ]] && echo ON || echo OFF' | ZDOTDIR="$PWD" claude -p --model haiku --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config --allowedTools=Bash
 ```
 
-To check the PreToolUse hook in a logged-in environment, use `auto` mode. The model should get safe-zsh's reason, rewrite the command in POSIX sh such as `echo "$PATH" | tr ':' '\n'` and run it again; without `--plugin-dir` it should be refused with the `dangerous rm operations` message.
+To check the PreToolUse hook in a logged-in environment, use `auto` mode. The model should get safe-zsh's reason, rewrite the command in POSIX sh such as `printf '%s\n' "$PATH" | tr ':' '\n'` and run it again; without `--plugin-dir` it should be refused with the `dangerous rm operations` message.
 
 ```sh
 cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: print -l ${(s/:/)PATH} | wc -l' | claude -p --model haiku --permission-mode auto --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config
@@ -209,6 +209,8 @@ For a new version, merge a PR that bumps `version` in `plugins/safe-zsh/.claude-
 - If `CLAUDE_ENV_FILE` changes how it works, the plugin could silently stop having any effect. CI checks what the hook wrote every day with the latest Claude Code.
 - The PreToolUse hook looks only for `${(`. Other syntax the safety check cannot parse, such as `$${` or nested subshells, is not caught and is still refused with the `rm` message.
 - Single quotes are stripped without parsing, so an apostrophe inside double quotes can hide a later `${(` (the built-in check still refuses it), and `${(...)}` in a quoted heredoc body is treated as code and denied.
+- Text bash reads without trouble is denied too, such as a backslash-escaped `\${(` or a `${(` in a comment.
+- The PreToolUse hook denies in every permission mode. A command that used to show an approval prompt in default mode, and ran once the user approved, is now always denied, and the only way around it is to turn the plugin off. The same may apply to commands that ran under bypass mode or an allow rule.
 - The PreToolUse hook was checked only with `claude -p --permission-mode auto` on macOS. Bypass and default modes, the interactive app and Linux have not been tried.
 
 ## License

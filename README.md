@@ -21,7 +21,7 @@ macOS에서는 로그인 셸이 zsh라서 Bash 도구도 zsh로 명령을 실행
 | `grep -rn TODO src --include=*.ts` | `(eval):1: no matches found: --include=*.ts`, grep이 실행되지 않음 | grep이 `*.ts` 패턴을 받아 실행 |
 | `echo =====; ls` | `(eval):1: ==== not found`, 뒤 명령도 멈춤 | `=====`을 찍고 `ls`까지 실행 |
 | `T="a.py b.py"; pytest $T` | `$T`가 한 단어로 넘어가 `a.py b.py`라는 파일 하나를 찾음 | `a.py`, `b.py` 두 인자로 나뉨 |
-| `print -l ${(s/:/)PATH} \| rg -c /` | 실행 전에 `could not be checked for dangerous rm operations`로 거부됨(명령에 `rm`은 없음) | 훅이 이유를 알려 거부하고, 모델이 `echo "$PATH" \| tr ':' '\n' \| rg -c /`로 고쳐 실행 |
+| `print -l ${(s/:/)PATH} \| rg -c /` | 실행 전에 `could not be checked for dangerous rm operations`로 거부됨(명령에 `rm`은 없음) | 훅이 이유를 알려 거부하고, 모델이 POSIX sh로 고쳐 실행 |
 
 ## 만든 이유
 
@@ -65,7 +65,7 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 3. 셸이 bash면 조건이 거짓이라 아무것도 하지 않고 0으로 끝납니다. `[ ... ] && setopt` 대신 `if ... fi`로 쓴 이유입니다.
 4. 셸이 zsh(`CLAUDE_CODE_SHELL`이 있으면 그 값, 없으면 `$SHELL`)이면 훅이 stdout으로 두 줄을 더 냅니다. SessionStart 훅의 stdout은 모델에게 전달됩니다.
    - Bash 도구 안에서 직접 띄운 `zsh -c`는 위 옵션을 물려받지 않으니 스크립트 맨 앞에 `setopt no_nomatch sh_word_split no_equals;`를 붙이거나, bash 문법이면 `bash -c`를 쓰라는 안내. 도구나 스크립트가 띄우는 자식 zsh에는 닿지 않습니다.
-   - `${(s/:/)PATH}`, `${(@f)...}` 같은 zsh `${(flags)...}` 확장은 안전 검사가 파싱하지 못해 실행 전에 `rm` 위험으로 거부되고 `setopt`로도 막을 수 없으니, `echo "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`처럼 POSIX sh로 쓰라는 안내([#104925](https://github.com/anthropics/claude-code/issues/104925)). 모델이 그래도 쓰면 아래 PreToolUse 훅이 거부합니다.
+   - `${(s/:/)PATH}`, `${(@f)...}` 같은 zsh `${(flags)...}` 확장은 안전 검사가 파싱하지 못해 실행 전에 `rm` 위험으로 거부되고 `setopt`로도 막을 수 없으니, `printf '%s\n' "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`처럼 POSIX sh로 쓰라는 안내([#104925](https://github.com/anthropics/claude-code/issues/104925)). 모델이 그래도 쓰면 아래 PreToolUse 훅이 거부합니다.
 
    모델이 두 안내를 따르지 않을 수 있습니다.
 
@@ -74,7 +74,7 @@ Claude Desktop에서는 프롬프트 옆 `+` → Plugins → Add marketplace에 
 ### zsh `${(flags)...}` 명령 거부(PreToolUse)
 
 1. 세션 시작 안내에도 모델이 `${(flags)...}`를 쓸 수 있으므로, Bash 도구 명령마다 PreToolUse 훅이 Claude Code의 안전 검사보다 먼저 명령을 읽습니다. 작은따옴표 안은 글자 그대로이므로 빼고, 남은 부분에 `${(`가 있으면 거부합니다.
-2. 거부 사유는 모델에게 전달됩니다. 안전 검사가 이 확장을 파싱하지 못해 명령이 실행되지도 않은 채 `rm` 위험으로 거부될 것이라는 설명, POSIX sh로 고쳐 쓰는 방법(`echo "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`), `zsh -c`·`eval`·스크립트로 감싸 검사를 피하지 말라는 것, heredoc 안의 글자라면 Write 도구로 파일을 쓰라는 것입니다.
+2. 거부 사유는 모델에게 전달됩니다. 안전 검사가 이 확장을 파싱하지 못해 명령이 실행되지도 않은 채 `rm` 위험으로 거부될 것이라는 설명, POSIX sh로 고쳐 쓰는 방법(`printf '%s\n' "$PATH" | tr ':' '\n'`, `while IFS= read -r line; do ...; done < file`), `zsh -c`·`eval`·스크립트로 감싸 검사를 피하지 말라는 것, heredoc 안의 글자라면 Write 도구로 파일을 쓰라는 것입니다.
 3. 훅은 거부만 하고 승인은 하지 않습니다. `${(`가 없으면 아무것도 출력하지 않으므로, Claude Code는 플러그인이 없을 때와 똑같이 판단합니다.
 4. `zsh -c`로 감싸는 자동 변환은 넣지 않았습니다. 안전 검사를 피하게 만들 수 있기 때문입니다.
 
@@ -194,7 +194,7 @@ cd site && npm run og                     # 언어별 링크 미리보기 이미
 cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: [[ -o shwordsplit ]] && echo ON || echo OFF' | ZDOTDIR="$PWD" claude -p --model haiku --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config --allowedTools=Bash
 ```
 
-PreToolUse 훅은 로그인된 환경에서 `auto` 모드로 확인합니다. 모델이 safe-zsh의 거부 사유를 받은 뒤 `echo "$PATH" | tr ':' '\n'`처럼 POSIX 형식으로 고쳐 다시 실행해야 하고, `--plugin-dir`를 빼면 `dangerous rm operations` 메시지로 거부돼야 합니다.
+PreToolUse 훅은 로그인된 환경에서 `auto` 모드로 확인합니다. 모델이 safe-zsh의 거부 사유를 받은 뒤 `printf '%s\n' "$PATH" | tr ':' '\n'`처럼 POSIX 형식으로 고쳐 다시 실행해야 하고, `--plugin-dir`를 빼면 `dangerous rm operations` 메시지로 거부돼야 합니다.
 
 ```sh
 cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this command and reply with its output only: print -l ${(s/:/)PATH} | wc -l' | claude -p --model haiku --permission-mode auto --plugin-dir /path/to/claude-safe-zsh/plugins/safe-zsh --setting-sources local --strict-mcp-config
@@ -209,6 +209,8 @@ cd "$(mktemp -d)" && printf '%s\n' 'Use the Bash tool to run exactly this comman
 - `CLAUDE_ENV_FILE`의 동작이 바뀌면 플러그인이 조용히 효과를 잃을 수 있습니다. CI가 매일 최신 Claude Code로 훅이 쓴 내용을 확인합니다.
 - PreToolUse 훅은 `${(`만 봅니다. `$${`, 중첩 subshell처럼 안전 검사가 파싱하지 못하는 다른 구문은 잡지 않으므로 기존 `rm` 메시지로 계속 거부됩니다.
 - 작은따옴표는 파싱하지 않고 지웁니다. 그래서 큰따옴표 안의 아포스트로피가 그 뒤의 `${(`를 가릴 수 있고(이때는 기본 검사가 그대로 거부합니다), quoted heredoc 본문의 `${(...)}`도 코드로 보고 거부합니다.
+- 백슬래시로 이스케이프한 `\${(`, 주석 안의 `${(`처럼 bash가 문제없이 읽는 글자도 거부합니다.
+- PreToolUse 훅은 권한 모드와 관계없이 거부합니다. 기본 모드에서 원래 승인 창이 떠서 사용자가 승인하면 실행되던 명령도, 이 플러그인을 켜면 항상 거부되고 플러그인을 끄는 것 말고는 우회할 방법이 없습니다. bypass 모드나 allow 규칙으로 실행되던 명령도 마찬가지일 수 있습니다.
 - PreToolUse 훅은 macOS의 `claude -p --permission-mode auto`에서만 확인했습니다. bypass·기본 모드, 대화형 앱, Linux에서는 시험하지 않았습니다.
 
 ## License

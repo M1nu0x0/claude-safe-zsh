@@ -126,10 +126,10 @@ test('under zsh, the hook prints two lines for the model: how to start a child z
   // The ${(flags)...} line names the refusal and the same POSIX rewrite the PreToolUse deny gives.
   assert.match(flags, /\$\{\(flags\)\.\.\.\}/)
   assert.match(flags, /dangerous rm/)
-  assert.ok(flags.includes(`echo "$PATH" | tr ':' '\\n'`))
+  assert.ok(flags.includes(`printf '%s\\n' "$PATH" | tr ':' '\\n'`))
   assert.ok(flags.includes('while IFS= read -r line; do ...; done < file'))
   const deny = readFileSync(join(import.meta.dirname, '..', 'hooks', 'pre-tool-use.sh'), 'utf8')
-  assert.ok(deny.includes(`echo \\"$PATH\\" | tr ':' '\\\\n'`))
+  assert.ok(deny.includes(`printf '%s\\\\n' \\"$PATH\\" | tr ':' '\\\\n'`))
 })
 
 test('under bash the hook prints nothing, and CLAUDE_CODE_SHELL decides over SHELL', () => {

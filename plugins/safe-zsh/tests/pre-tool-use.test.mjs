@@ -52,7 +52,7 @@ test('the command from the report, print -l ${(s/:/)PATH}, is denied with a reas
   assert.match(reason, /\$\{\(flags\)\.\.\.\}/)
   assert.match(reason, /dangerous rm/)
   // The rewrite it suggests is real POSIX sh, decoded from JSON as the model reads it.
-  assert.ok(reason.includes(`echo "$PATH" | tr ':' '\\n'`))
+  assert.ok(reason.includes(`printf '%s\\n' "$PATH" | tr ':' '\\n'`))
   assert.ok(reason.includes('while IFS= read -r line; do ...; done < file'))
 })
 
@@ -64,7 +64,7 @@ test('other flag forms are denied too, inside double quotes and command substitu
 })
 
 test('a command without ${(...)} prints nothing, so Claude Code decides as it would without the plugin', () => {
-  assert.equal(run(`echo "$PATH" | tr ':' '\\n' | rg -c /`), '')
+  assert.equal(run(`printf '%s\\n' "$PATH" | tr ':' '\\n' | rg -c /`), '')
   assert.equal(run('ls ${HOME}/x $((1 + 2)) "$(pwd)" ${v:-d}'), '')
   assert.equal(run('rm -rf ./build'), '')
 })
@@ -81,6 +81,13 @@ test('${(...)} inside single quotes is literal text and is let through, as the b
   assert.equal(run(`zsh -fc 'print -l \${(s/:/)PATH}' | rg -c /`), '')
   // Outside the quotes it is still code.
   assertDenied(`echo 'a' \${(s/:/)PATH} 'b'`)
+})
+
+test('known over-matches, listed in the README limits: an escaped \\${(, a comment and a quoted heredoc body', () => {
+  // bash reads all three as text, but the hook does not parse the shell. If it learns to, flip these.
+  assertDenied('echo \\${(f)x}')
+  assertDenied('ls # ${(f)x}')
+  assertDenied("cat > a.zsh <<'EOF'\nprint -l ${(s/:/)PATH}\nEOF")
 })
 
 test('escaped double quotes in the command do not cut it short', () => {

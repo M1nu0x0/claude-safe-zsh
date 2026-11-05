@@ -13,6 +13,6 @@ EOF
 case "${CLAUDE_CODE_SHELL:-${SHELL:-}}" in
   *zsh) cat <<'EOF' ;;
 The Bash tool runs zsh with setopt no_nomatch sh_word_split no_equals applied. A zsh you start inside a command (zsh -c, zsh -ic, a #!/bin/zsh script) does not inherit it: begin its script with "setopt no_nomatch sh_word_split no_equals;", or use bash -c for bash syntax.
-Do not use zsh ${(flags)...} expansions such as ${(s/:/)PATH} or ${(@f)...} in Bash tool commands: Claude Code's safety check cannot parse them and refuses the command as a possible dangerous rm before it runs, and setopt cannot help. Write POSIX sh instead: echo "$PATH" | tr ':' '\n' to split a variable, while IFS= read -r line; do ...; done < file to read lines.
+Do not use zsh ${(flags)...} expansions such as ${(s/:/)PATH} or ${(@f)...} in Bash tool commands: Claude Code's safety check cannot parse them and refuses the command as a possible dangerous rm before it runs, and setopt cannot help. Write POSIX sh instead: printf '%s\n' "$PATH" | tr ':' '\n' to split a variable, while IFS= read -r line; do ...; done < file to read lines.
 EOF
 esac

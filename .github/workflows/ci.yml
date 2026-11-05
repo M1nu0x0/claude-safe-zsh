@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: ["main"]
   # Daily against the latest Claude Code, which can change how CLAUDE_ENV_FILE works between releases,
-  # and to see whether the upstream issue has been fixed.
+  # and to see whether the upstream issues (#103027, #104925) have been fixed.
   schedule:
     - cron: "17 18 * * *" # 03:17 KST
   workflow_dispatch:

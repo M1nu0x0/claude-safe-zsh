@@ -8,7 +8,7 @@ command=$(sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/
 case "$command" in
   *'${('*)
     cat <<'EOF'
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"safe-zsh: this command uses a zsh ${(flags)...} expansion. Claude Code's safety check cannot parse it and would refuse the command as a possible dangerous rm, although the command has not run. Rewrite it in POSIX sh: split a variable with echo \"$PATH\" | tr ':' '\\n', and read lines with while IFS= read -r line; do ...; done < file. Do not wrap it in zsh -c, eval or a script to get past the check. If it is literal text in a heredoc, write the file with the Write tool."}}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"safe-zsh: this command uses a zsh ${(flags)...} expansion. Claude Code's safety check cannot parse it and would refuse the command as a possible dangerous rm, although the command has not run. Rewrite it in POSIX sh: split a variable with printf '%s\\n' \"$PATH\" | tr ':' '\\n', and read lines with while IFS= read -r line; do ...; done < file. Do not wrap it in zsh -c, eval or a script to get past the check. If it is literal text in a heredoc, write the file with the Write tool."}}
 EOF
     ;;
 esac
