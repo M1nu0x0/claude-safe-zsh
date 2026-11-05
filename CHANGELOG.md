@@ -4,6 +4,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-05
+
 ### Added
 
 - A PreToolUse hook for the Bash tool that denies a command using a zsh `${(flags)...}` expansion, such as `print -l ${(s/:/)PATH}`, before Claude Code's safety check refuses it with `This command could not be checked for dangerous rm operations` although it has no `rm` ([anthropics/claude-code#104925](https://github.com/anthropics/claude-code/issues/104925)); `setopt` cannot help there, because the command is refused before any shell starts. The reason it gives the model says what is really wrong and how to write the command in POSIX sh. It only ever denies, never approves, ignores text inside single quotes, and does not rewrite commands into `zsh -c`, which could get them past the check
@@ -48,6 +50,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - A check that a release tag matches the plugin's version, and Dependabot updates for GitHub Actions
 - GitHub Pages site and READMEs in Korean, English and Japanese, with every related upstream issue and its live state
 
-[Unreleased]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/M1nu0x0/claude-safe-zsh/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/M1nu0x0/claude-safe-zsh/releases/tag/v0.1.0
